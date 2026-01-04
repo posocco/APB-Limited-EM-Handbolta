@@ -889,8 +889,6 @@ async function loadGames() {
     const now = new Date();
 
     for (let gameObj of games) {
-      const docSnap = { id: gameObj.id, data: () => gameObj.data };
-      const game = gameObj.data;
       const gameId = gameObj.id;
       const game = gameObj.data;
       const canUserTip = canTip(game.gameTime);
