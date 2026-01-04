@@ -4,12 +4,6 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="theme-color" content="#667eea">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="APB Tippspil">
-<link rel="manifest" href="/manifest.json">
-<link rel="apple-touch-icon" href="/icon-192.png">
-  <meta name="theme-color" content="#667eea">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="APB Tippspil">
@@ -29,7 +23,6 @@
       min-height: 100vh;
       padding: 20px;
     }
-    
 
     .container {
       max-width: 1200px;
@@ -307,19 +300,11 @@
       <button id="logoutBtn" style="background: #dc3545;">Útskrá</button>
     </div>
 
-    <!-- DEILDIR -->
-    <div class="grid-2">
-      <div class="section">
-        <h2>Búa til deild</h2>
-        <input type="text" id="leagueName" placeholder="Nafn deildar">
-        <button id="createLeagueBtn">Búa til deild</button>
-      </div>
-
-      <div class="section">
-        <h2>Ganga í deild</h2>
-        <input type="text" id="leagueCode" placeholder="Deildar kóði">
-        <button id="joinLeagueBtn">Ganga í deild</button>
-      </div>
+    <!-- GANGA Í DEILD -->
+    <div class="section">
+      <h2>Ganga í deild</h2>
+      <input type="text" id="leagueCode" placeholder="Deildar kóði">
+      <button id="joinLeagueBtn">Ganga í deild</button>
     </div>
 
     <!-- MÍNAR DEILDIR -->
@@ -338,6 +323,13 @@
     <div class="section">
       <h2>🏆 Stigatafla</h2>
       <ul id="leagueScores"></ul>
+    </div>
+
+    <!-- BÚA TIL DEILD -->
+    <div class="section">
+      <h2>Búa til deild</h2>
+      <input type="text" id="leagueName" placeholder="Nafn deildar">
+      <button id="createLeagueBtn">Búa til deild</button>
     </div>
 
     <!-- STIGASTILLINGAR PANEL -->
@@ -479,6 +471,5 @@
       });
     }
   </script>
-  
 </body>
 </html>
