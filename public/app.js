@@ -1577,4 +1577,4 @@ onAuthStateChanged(auth, async user => {
     document.getElementById("loggedInSection").style.display = "none";
     stopNotificationChecks();
   }
-});
+}); 
