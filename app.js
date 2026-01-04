@@ -6,6 +6,7 @@ import {
   signInWithEmailAndPassword,
   onAuthStateChanged,
   GoogleAuthProvider,
+  signInWithPopup,
   signInWithRedirect,
   getRedirectResult
 } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
@@ -146,10 +147,20 @@ document.getElementById("loginBtn")?.addEventListener("click", async () => {
 
 document.getElementById("googleLoginBtn")?.addEventListener("click", async () => {
   const provider = new GoogleAuthProvider();
+  
   try {
-    await signInWithRedirect(auth, provider);
+    // Prófa popup fyrst
+    await signInWithPopup(auth, provider);
+    // Ekki þarf alert - onAuthStateChanged sér um UI uppfærslu
+    
   } catch (error) {
-    alert("Villa við Google innskráningu: " + error.message);
+    // Ef popup virkar ekki (blocked), nota redirect
+    if (error.code === 'auth/popup-blocked' || error.code === 'auth/cancelled-popup-request') {
+      console.log("Popup blocked, using redirect instead");
+      await signInWithRedirect(auth, provider);
+    } else if (error.code !== 'auth/popup-closed-by-user') {
+      alert("Villa við Google innskráningu: " + error.message);
+    }
   }
 });
 
@@ -157,19 +168,13 @@ document.getElementById("googleLoginBtn")?.addEventListener("click", async () =>
 getRedirectResult(auth)
   .then(async (result) => {
     if (result && result.user) {
-      // Biðja um notendanafn ef þetta er fyrsta skráningin
-      const userSnap = await getDocs(query(collection(db, "leagueMembers"), where("userId", "==", result.user.uid)));
-      
-      if (userSnap.empty) {
-        const username = prompt("Veldu notendanafn:") || result.user.displayName || result.user.email.split("@")[0];
-        document.getElementById("username").value = username;
-      }
-      
-      alert("Skráður inn með Google!");
+      // onAuthStateChanged sér um restina
     }
   })
   .catch((error) => {
-    console.error("Google redirect error:", error);
+    if (error.code !== 'auth/popup-closed-by-user') {
+      console.error("Google redirect error:", error);
+    }
   });
 
 document.getElementById("logoutBtn")?.addEventListener("click", async () => {
