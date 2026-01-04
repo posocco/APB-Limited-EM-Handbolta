@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="is">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>APB Limited Getraunaleikur EM í Handbolta</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      padding: 20px;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      background: white;
+      border-radius: 15px;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+      padding: 30px;
+    }
+
+    h1 {
+      text-align: center;
+      color: #667eea;
+      margin-bottom: 30px;
+      font-size: 2.5em;
+    }
+
+    h2 {
+      color: #764ba2;
+      margin: 25px 0 15px 0;
+      border-bottom: 2px solid #667eea;
+      padding-bottom: 10px;
+    }
+
+    h3 {
+      color: #667eea;
+      margin: 15px 0 10px 0;
+      font-size: 1.1em;
+    }
+
+    .section {
+      margin-bottom: 30px;
+      padding: 20px;
+      background: #f8f9fa;
+      border-radius: 10px;
+    }
+
+    input[type="text"],
+    input[type="email"],
+    input[type="password"],
+    input[type="datetime-local"],
+    input[type="number"],
+    textarea {
+      padding: 12px;
+      margin: 8px 5px;
+      border: 2px solid #ddd;
+      border-radius: 6px;
+      font-size: 14px;
+      transition: border 0.3s;
+    }
+
+    textarea {
+      width: 100%;
+      max-width: 500px;
+      min-height: 60px;
+      font-family: inherit;
+    }
+
+    input:focus, textarea:focus, select:focus {
+      outline: none;
+      border-color: #667eea;
+    }
+
+    button {
+      padding: 12px 24px;
+      margin: 8px 5px;
+      background: #667eea;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: bold;
+      transition: all 0.3s;
+    }
+
+    button:hover {
+      background: #764ba2;
+      transform: translateY(-2px);
+      box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+    }
+
+    #googleLoginBtn:hover {
+      background: #f8f9fa !important;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.2) !important;
+    }
+
+    button:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    ul {
+      list-style: none;
+      padding: 0;
+    }
+
+    li {
+      padding: 15px;
+      margin: 10px 0;
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      transition: all 0.3s;
+    }
+
+    li:hover {
+      transform: translateX(5px);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    }
+
+    #userLeagues li {
+      cursor: pointer;
+      border-left: 4px solid #667eea;
+    }
+
+    #userLeagues li:hover {
+      background: #f0f4ff;
+    }
+
+    #gamesList li {
+      border-left: 4px solid #764ba2;
+    }
+
+    #gamesList input {
+      width: 80px;
+    }
+
+    #leagueScores li {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-weight: 500;
+    }
+
+    #leagueScores li:first-child {
+      background: linear-gradient(135deg, #ffd700 0%, #ffed4e 100%);
+      font-size: 1.1em;
+    }
+
+    #leagueScores li:nth-child(2) {
+      background: linear-gradient(135deg, #c0c0c0 0%, #e8e8e8 100%);
+    }
+
+    #leagueScores li:nth-child(3) {
+      background: linear-gradient(135deg, #cd7f32 0%, #e8a87c 100%);
+    }
+
+    select {
+      padding: 12px;
+      margin: 8px 5px;
+      border: 2px solid #ddd;
+      border-radius: 6px;
+      font-size: 14px;
+      background: white;
+    }
+
+    .admin-panel {
+      background: #fff3cd;
+      border: 2px solid #ffc107;
+      padding: 20px;
+      border-radius: 10px;
+      margin-top: 20px;
+    }
+
+    .admin-panel h2 {
+      color: #856404;
+      border-bottom-color: #ffc107;
+    }
+
+    small {
+      color: #666;
+      font-size: 0.85em;
+    }
+
+    .error-text {
+      color: #dc3545;
+      font-weight: bold;
+    }
+
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+    }
+
+    .bonus-question-item {
+      background: white;
+      padding: 15px;
+      margin: 10px 0;
+      border-radius: 8px;
+      border-left: 4px solid #667eea;
+    }
+
+    #bonusQuestionsPanel {
+      margin-top: 20px;
+      padding: 20px;
+      background: #e3f2fd;
+      border-radius: 10px;
+      border: 2px solid #2196f3;
+    }
+
+    #bonusQuestionsPanel h3 {
+      color: #1565c0;
+    }
+
+    .form-group {
+      margin-bottom: 15px;
+    }
+
+    .form-group label {
+      display: block;
+      margin-bottom: 5px;
+      font-weight: bold;
+      color: #333;
+    }
+
+    @media (max-width: 768px) {
+      .grid-2 {
+        grid-template-columns: 1fr;
+      }
+
+      .container {
+        padding: 15px;
+      }
+
+      h1 {
+        font-size: 1.8em;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🤾 APB Limited Getraunaleikur EM í Handbolta 🤾</h1>
+
+    <!-- INNSKRÁNING -->
+    <div class="section" id="loginSection">
+      <h2>Innskráning / Nýskráning</h2>
+      
+      <!-- Google Login -->
+      <div style="margin-bottom: 20px;">
+        <button id="googleLoginBtn" style="background: white; color: #3c4043; border: 1px solid #dadce0; display: flex; align-items: center; gap: 12px; width: 100%; max-width: 300px; justify-content: center; font-weight: 500;">
+          <svg width="18" height="18" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">
+            <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+            <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+            <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
+            <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+            <path fill="none" d="M0 0h48v48H0z"/>
+          </svg>
+          Skrá inn með Google
+        </button>
+      </div>
+      
+      <div style="text-align: center; margin: 20px 0; color: #666;">
+        <span>━━━━━ eða ━━━━━</span>
+      </div>
+      
+      <!-- Email Login -->
+      <input type="text" id="username" placeholder="Notendanafn *" required>
+      <input type="email" id="email" placeholder="Netfang *" required>
+      <input type="password" id="password" placeholder="Lykilorð *" required>
+      <small style="display: block; margin: 5px 5px 10px 5px; color: #666;">* Skylda</small>
+      <button id="loginBtn">Skrá inn / Búa til aðgang</button>
+    </div>
+
+    <!-- NOTANDI SKRÁÐUR INN -->
+    <div class="section" id="loggedInSection" style="display: none;">
+      <h2>👤 Innskráður</h2>
+      <p style="margin-bottom: 10px;">
+        <strong id="loggedInUsername"></strong> 
+        (<span id="loggedInEmail" style="color: #666;"></span>)
+      </p>
+      <button id="logoutBtn" style="background: #dc3545;">Útskrá</button>
+    </div>
+
+    <!-- DEILDIR -->
+    <div class="grid-2">
+      <div class="section">
+        <h2>Búa til deild</h2>
+        <input type="text" id="leagueName" placeholder="Nafn deildar">
+        <button id="createLeagueBtn">Búa til deild</button>
+      </div>
+
+      <div class="section">
+        <h2>Ganga í deild</h2>
+        <input type="text" id="leagueCode" placeholder="Deildar kóði">
+        <button id="joinLeagueBtn">Ganga í deild</button>
+      </div>
+    </div>
+
+    <!-- MÍNAR DEILDIR -->
+    <div class="section">
+      <h2>Mínar deildir</h2>
+      <ul id="userLeagues"></ul>
+    </div>
+
+    <!-- LEIKIR -->
+    <div class="section">
+      <h2>Leikir</h2>
+      <ul id="gamesList"></ul>
+    </div>
+
+    <!-- STIGATAFLA -->
+    <div class="section">
+      <h2>🏆 Stigatafla</h2>
+      <ul id="leagueScores"></ul>
+    </div>
+
+    <!-- STIGASTILLINGAR PANEL -->
+    <div id="pointSettingsPanel" class="admin-panel" style="display: none;">
+      <h2>⚙️ Stigastillingar</h2>
+      <p style="margin-bottom: 15px; color: #666;">Stilltu hversu mörg stig eru veitt fyrir mismunandi tegundir af réttum giskunum:</p>
+      
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px;">
+        <div>
+          <label style="display: block; margin-bottom: 5px; font-weight: bold;">Hárrétt úrslit:</label>
+          <input type="number" id="pointExactScore" value="5" min="0" style="width: 100px;">
+          <small style="display: block; color: #666;">t.d. tippað 33-32, úrslit 33-32</small>
+        </div>
+        
+        <div>
+          <label style="display: block; margin-bottom: 5px; font-weight: bold;">Rétt skor heimaliðs:</label>
+          <input type="number" id="pointHomeScore" value="3" min="0" style="width: 100px;">
+          <small style="display: block; color: #666;">t.d. tippað 33-32, úrslit 33-30</small>
+        </div>
+        
+        <div>
+          <label style="display: block; margin-bottom: 5px; font-weight: bold;">Rétt skor útiliðs:</label>
+          <input type="number" id="pointAwayScore" value="3" min="0" style="width: 100px;">
+          <small style="display: block; color: #666;">t.d. tippað 33-32, úrslit 35-32</small>
+        </div>
+        
+        <div>
+          <label style="display: block; margin-bottom: 5px; font-weight: bold;">Rétt sigurvegari:</label>
+          <input type="number" id="pointOutcome" value="2" min="0" style="width: 100px;">
+          <small style="display: block; color: #666;">t.d. tippað 33-32, úrslit 40-35</small>
+        </div>
+      </div>
+      
+      <button id="savePointSettingsBtn">💾 Vista stigastillingar</button>
+    </div>
+
+    <!-- ADMIN PANEL -->
+    <div id="adminPanel" class="admin-panel" style="display: none;">
+      <h2>🔧 Stjórnandi</h2>
+      
+      <div style="margin-bottom: 20px;">
+        <h3>Búa til leik</h3>
+        <input type="text" id="adminHomeTeam" placeholder="Heimaliðs">
+        <input type="text" id="adminAwayTeam" placeholder="Útiliðs">
+        <input type="datetime-local" id="adminGameTime">
+        <button id="createGameAdminBtn">Búa til leik</button>
+      </div>
+
+      <div style="margin-bottom: 20px;">
+        <h3>Setja úrslit</h3>
+        <select id="resultGameSelect">
+          <option value="">Veldu leik</option>
+        </select><br>
+        <input type="number" id="resultScoreHome" placeholder="Heimaliðs" style="width: 100px; margin-top: 10px;">
+        <span style="margin: 0 5px;">-</span>
+        <input type="number" id="resultScoreAway" placeholder="Útiliðs" style="width: 100px;">
+        <button id="setResultBtn">Setja úrslit</button>
+      </div>
+
+      <div>
+        <h3>🎁 Bónusspurningar</h3>
+        <select id="bonusGameSelect">
+          <option value="">Veldu leik</option>
+        </select>
+        <button id="manageBonusBtn">Stjórna bónusspurningum</button>
+      </div>
+
+      <div style="margin-top: 20px;">
+        <h3>🗑️ Eyða leikjum</h3>
+        <select id="deleteGameSelect">
+          <option value="">Veldu leik til að eyða</option>
+        </select>
+        <button id="deleteGameBtn" style="background: #dc3545;">Eyða leik</button>
+      </div>
+
+      <div style="margin-top: 20px;">
+        <h3>👥 Stjórna notendum</h3>
+        <button id="viewMembersBtn">Sjá notendur í deild</button>
+        <div id="membersList" style="display: none; margin-top: 10px; padding: 15px; background: white; border-radius: 8px;"></div>
+      </div>
+
+      <!-- BÓNUSSPURNINGAR PANEL -->
+      <div id="bonusQuestionsPanel" style="display: none;">
+        <h3>Bónusspurningar fyrir valinn leik</h3>
+        
+        <div id="bonusQuestionsList"></div>
+
+        <div style="margin-top: 20px; padding: 15px; background: white; border-radius: 8px;">
+          <h3>Bæta við nýrri spurningu</h3>
+          
+          <div class="form-group">
+            <label>Tegund spurningar:</label>
+            <select id="bonusQuestionType">
+              <option value="text">Textasvar</option>
+              <option value="yesNo">Já/Nei</option>
+              <option value="number">Tala</option>
+              <option value="multipleChoice">Fjölval</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label>Spurning:</label>
+            <textarea id="bonusQuestionText" placeholder="t.d. Hver skorar fyrst?"></textarea>
+          </div>
+
+          <div class="form-group">
+            <label>Stig fyrir rétt svar:</label>
+            <input type="number" id="bonusQuestionPoints" value="1" min="1" style="width: 100px;">
+          </div>
+
+          <div class="form-group" id="bonusOptionsDiv" style="display: none;">
+            <label>Valmöguleikar (aðskildir með kommu):</label>
+            <input type="text" id="bonusQuestionOptions" placeholder="t.d. Messi, Ronaldo, Neymar">
+            <small style="display: block; margin-top: 5px;">Aðeins fyrir fjölvalsspurningar</small>
+          </div>
+
+          <button id="addBonusQuestionBtn">➕ Bæta við spurningu</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- LOAD APP.JS (sem importar firebase.js) -->
+  <script type="module" src="app.js"></script>
+</body>
+</html>
