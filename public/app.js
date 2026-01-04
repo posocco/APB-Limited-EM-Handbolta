@@ -1,4 +1,4 @@
-// BÆTT ÚTGÁFA MEÐ ERROR HANDLING OG LOCALSTORAGE
+// OPTIMIZED ÚTGÁFA MEÐ CACHE OG BETRI PERFORMANCE
 
 import { auth, db } from "./firebase.js";
 import {
@@ -32,6 +32,39 @@ let currentLeagueSettings = null;
 let currentGameForBonus = null;
 
 /* =========================
+   CACHE FYRIR GÖGN
+========================= */
+const cache = {
+  leagues: new Map(),
+  members: new Map(),
+  games: new Map(),
+  tips: new Map(),
+  bonusQuestions: new Map(),
+  bonusAnswers: new Map(),
+  lastFetch: {}
+};
+
+const CACHE_DURATION = 30000; // 30 sekúndur
+
+function isCacheValid(key) {
+  return cache.lastFetch[key] && (Date.now() - cache.lastFetch[key] < CACHE_DURATION);
+}
+
+function setCacheTimestamp(key) {
+  cache.lastFetch[key] = Date.now();
+}
+
+function clearCache() {
+  cache.leagues.clear();
+  cache.members.clear();
+  cache.games.clear();
+  cache.tips.clear();
+  cache.bonusQuestions.clear();
+  cache.bonusAnswers.clear();
+  cache.lastFetch = {};
+}
+
+/* =========================
    LOCALSTORAGE FYRIR STATE
 ========================= */
 function saveActiveLeague(leagueId) {
@@ -52,7 +85,6 @@ function loadActiveLeague() {
 function handleError(error, userMessage = "Villa kom upp") {
   console.error("Error:", error);
   
-  // Sérstakar Firebase villur
   if (error.code === 'permission-denied') {
     alert("Þú hefur ekki heimild til þessarar aðgerðar");
   } else if (error.code === 'not-found') {
@@ -85,6 +117,77 @@ const DEFAULT_POINTS = {
   awayTeamScore: 3,
   correctOutcome: 2
 };
+
+/* =========================
+   OPTIMIZED BATCH FETCHING
+========================= */
+async function fetchLeagueData(leagueId) {
+  const cacheKey = `league_${leagueId}`;
+  
+  if (isCacheValid(cacheKey)) {
+    return {
+      league: cache.leagues.get(leagueId),
+      members: Array.from(cache.members.values()).filter(m => m.leagueId === leagueId),
+      games: Array.from(cache.games.values()).filter(g => g.leagueId === leagueId),
+      tips: Array.from(cache.tips.values()).filter(t => t.leagueId === leagueId),
+      bonusQuestions: Array.from(cache.bonusQuestions.values()).filter(q => q.leagueId === leagueId),
+      bonusAnswers: Array.from(cache.bonusAnswers.values()).filter(a => a.leagueId === leagueId)
+    };
+  }
+
+  // Sækja allt samhliða
+  const [leagueSnap, membersSnap, gamesSnap, tipsSnap, bonusQSnap, bonusASnap] = await Promise.all([
+    getDoc(doc(db, "leagues", leagueId)),
+    getDocs(query(collection(db, "leagueMembers"), where("leagueId", "==", leagueId))),
+    getDocs(query(collection(db, "games"), where("leagueId", "==", leagueId))),
+    getDocs(query(collection(db, "tips"), where("leagueId", "==", leagueId))),
+    getDocs(query(collection(db, "bonusQuestions"), where("leagueId", "==", leagueId))),
+    getDocs(query(collection(db, "bonusAnswers"), where("leagueId", "==", leagueId)))
+  ]);
+
+  // Vista í cache
+  const league = leagueSnap.exists() ? { id: leagueId, ...leagueSnap.data() } : null;
+  if (league) cache.leagues.set(leagueId, league);
+
+  const members = [];
+  membersSnap.forEach(docSnap => {
+    const data = { id: docSnap.id, ...docSnap.data() };
+    cache.members.set(docSnap.id, data);
+    members.push(data);
+  });
+
+  const games = [];
+  gamesSnap.forEach(docSnap => {
+    const data = { id: docSnap.id, ...docSnap.data() };
+    cache.games.set(docSnap.id, data);
+    games.push(data);
+  });
+
+  const tips = [];
+  tipsSnap.forEach(docSnap => {
+    const data = { id: docSnap.id, ...docSnap.data() };
+    cache.tips.set(docSnap.id, data);
+    tips.push(data);
+  });
+
+  const bonusQuestions = [];
+  bonusQSnap.forEach(docSnap => {
+    const data = { id: docSnap.id, ...docSnap.data() };
+    cache.bonusQuestions.set(docSnap.id, data);
+    bonusQuestions.push(data);
+  });
+
+  const bonusAnswers = [];
+  bonusASnap.forEach(docSnap => {
+    const data = { id: docSnap.id, ...docSnap.data() };
+    cache.bonusAnswers.set(docSnap.id, data);
+    bonusAnswers.push(data);
+  });
+
+  setCacheTimestamp(cacheKey);
+
+  return { league, members, games, tips, bonusQuestions, bonusAnswers };
+}
 
 /* =========================
    PUSH NOTIFICATIONS
@@ -130,21 +233,19 @@ async function checkUpcomingGames() {
   if (!activeLeagueId || !auth.currentUser) return;
   
   try {
-    const gamesSnap = await getDocs(query(collection(db, "games"), where("leagueId", "==", activeLeagueId)));
+    const data = await fetchLeagueData(activeLeagueId);
     const now = new Date();
     
-    for (let gameDoc of gamesSnap.docs) {
-      const game = gameDoc.data();
+    for (let game of data.games) {
       if (!game.gameTime) continue;
       
       const gameTime = game.gameTime.toDate();
       const minutesUntil = (gameTime - now) / (1000 * 60);
       
-      // Athuga hvort notandi hafi tippað
-      const tipDoc = await getDoc(doc(db, "tips", `${gameDoc.id}_${auth.currentUser.uid}`));
-      const hasTipped = tipDoc.exists();
+      const hasTipped = data.tips.some(tip => 
+        tip.gameId === game.id && tip.userId === auth.currentUser.uid
+      );
       
-      // Senda tilkynningu ef 15-30 mín til leiks og hefur ekki tippað
       if (minutesUntil > 15 && minutesUntil <= 30 && !hasTipped) {
         sendNotification(
           "⏰ Ekki gleyma að tippa!",
@@ -152,7 +253,6 @@ async function checkUpcomingGames() {
         );
       }
       
-      // Senda tilkynningu þegar leikur byrjar
       if (minutesUntil >= 0 && minutesUntil <= 2) {
         sendNotification(
           "🔴 Leikur byrjar núna!",
@@ -194,11 +294,9 @@ document.getElementById("loginBtn")?.addEventListener("click", async () => {
   showLoading(true);
   try {
     await signInWithEmailAndPassword(auth, email, password);
-    // onAuthStateChanged sér um restina
   } catch (loginError) {
     try {
       await createUserWithEmailAndPassword(auth, email, password);
-      // onAuthStateChanged sér um restina
     } catch (createError) {
       handleError(createError, "Villa við innskráningu");
     }
@@ -242,6 +340,7 @@ document.getElementById("logoutBtn")?.addEventListener("click", async () => {
     await auth.signOut();
     saveActiveLeague(null);
     activeLeagueId = null;
+    clearCache();
     location.reload();
   } catch (error) {
     handleError(error, "Villa við útskráningu");
@@ -267,7 +366,6 @@ document.getElementById("createLeagueBtn")?.addEventListener("click", async () =
 
   showLoading(true);
   try {
-    // Nota transaction til að tryggja að báðar aðgerðir gangi upp
     const leagueRef = doc(collection(db, "leagues"));
     const memberRef = doc(db, "leagueMembers", `${leagueRef.id}_${user.uid}`);
     
@@ -289,6 +387,7 @@ document.getElementById("createLeagueBtn")?.addEventListener("click", async () =
       });
     });
 
+    clearCache();
     alert(`Deild "${name.trim()}" búin til!`);
     document.getElementById("leagueName").value = "";
     await loadUserLeagues();
@@ -322,7 +421,6 @@ document.getElementById("joinLeagueBtn")?.addEventListener("click", async () => 
     const league = snap.docs[0];
     const leagueId = league.id;
     
-    // Athuga hvort notandi sé þegar í deildinni
     const existingMember = await getDoc(doc(db, "leagueMembers", `${leagueId}_${user.uid}`));
     if (existingMember.exists()) {
       alert("Þú ert þegar í þessari deild!");
@@ -337,6 +435,7 @@ document.getElementById("joinLeagueBtn")?.addEventListener("click", async () => 
       joinedAt: Timestamp.now()
     });
 
+    clearCache();
     alert(`Þú ert núna í deild: ${league.data().name}`);
     document.getElementById("leagueCode").value = "";
     await loadUserLeagues();
@@ -348,33 +447,36 @@ document.getElementById("joinLeagueBtn")?.addEventListener("click", async () => 
 });
 
 /* =========================
-   SÝNA DEILDIR MEÐ KÓÐA
+   SÝNA DEILDIR
 ========================= */
 async function loadUserLeagues() {
   const ul = document.getElementById("userLeagues");
   ul.innerHTML = "<li>Hleð deildum...</li>";
 
   try {
-    const snap = await getDocs(query(collection(db, "leagueMembers"), where("userId", "==", auth.currentUser.uid)));
+    const memberSnap = await getDocs(query(
+      collection(db, "leagueMembers"), 
+      where("userId", "==", auth.currentUser.uid)
+    ));
     
-    if (snap.empty) {
+    if (memberSnap.empty) {
       ul.innerHTML = "<li>Þú ert ekki í neinum deildum enn</li>";
       return;
     }
 
-    ul.innerHTML = "";
-    const leagueIds = snap.docs.map(d => d.data().leagueId);
+    const leagueIds = memberSnap.docs.map(d => d.data().leagueId);
     
-    // Sækja allar deildir í einu
     const leaguesSnap = await getDocs(collection(db, "leagues"));
-    const leaguesMap = {};
-    leaguesSnap.docs.forEach(doc => {
-      leaguesMap[doc.id] = doc.data();
+    const leaguesMap = new Map();
+    leaguesSnap.docs.forEach(docSnap => {
+      leaguesMap.set(docSnap.id, docSnap.data());
     });
 
-    for (let d of snap.docs) {
+    ul.innerHTML = "";
+
+    for (let d of memberSnap.docs) {
       const leagueId = d.data().leagueId;
-      const leagueData = leaguesMap[leagueId];
+      const leagueData = leaguesMap.get(leagueId);
       
       if (!leagueData) continue;
       
@@ -385,7 +487,6 @@ async function loadUserLeagues() {
       `;
       li.style.cursor = "pointer";
       
-      // Merkja virka deild
       if (leagueId === activeLeagueId) {
         li.style.background = "#e8eaf6";
         li.style.borderLeft = "4px solid #667eea";
@@ -397,14 +498,8 @@ async function loadUserLeagues() {
         
         showLoading(true);
         try {
-          await loadLeagueSettings();
-          await loadGames();
-          await loadScores();
-          await checkAdmin();
-          await checkUpcomingGames();
-          
-          // Uppfæra UI
-          await loadUserLeagues(); // Refresh til að sýna active deild
+          await loadAllLeagueData();
+          await loadUserLeagues();
         } catch (error) {
           handleError(error, "Villa við að hlaða deild");
         } finally {
@@ -415,12 +510,11 @@ async function loadUserLeagues() {
       ul.appendChild(li);
     }
     
-    // Ef við höfum vistað deild, hlaða henni sjálfkrafa
     if (!activeLeagueId) {
       const savedLeagueId = loadActiveLeague();
       if (savedLeagueId && leagueIds.includes(savedLeagueId)) {
         const savedLi = Array.from(ul.children).find(li => 
-          li.onclick && li.textContent.includes(leaguesMap[savedLeagueId]?.name)
+          li.onclick && li.textContent.includes(leaguesMap.get(savedLeagueId)?.name)
         );
         if (savedLi) {
           savedLi.click();
@@ -434,16 +528,30 @@ async function loadUserLeagues() {
 }
 
 /* =========================
+   LOAD ALL DATA AT ONCE
+========================= */
+async function loadAllLeagueData() {
+  const data = await fetchLeagueData(activeLeagueId);
+  
+  if (data.league) {
+    currentLeagueSettings = data.league.pointSettings || DEFAULT_POINTS;
+  }
+  
+  await Promise.all([
+    renderGames(data),
+    renderScores(data),
+    checkAdminWithData(data),
+    checkUpcomingGames()
+  ]);
+}
+
+/* =========================
    HLAÐA STIGASTILLINGUM
 ========================= */
 async function loadLeagueSettings() {
   try {
-    const leagueDoc = await getDoc(doc(db, "leagues", activeLeagueId));
-    if (leagueDoc.exists()) {
-      currentLeagueSettings = leagueDoc.data().pointSettings || DEFAULT_POINTS;
-    } else {
-      currentLeagueSettings = DEFAULT_POINTS;
-    }
+    const data = await fetchLeagueData(activeLeagueId);
+    currentLeagueSettings = data.league?.pointSettings || DEFAULT_POINTS;
   } catch (error) {
     console.error("Villa við að hlaða stillingum:", error);
     currentLeagueSettings = DEFAULT_POINTS;
@@ -451,15 +559,14 @@ async function loadLeagueSettings() {
 }
 
 /* =========================
-   ADMIN CHECK + VISTA STILLINGAR
+   ADMIN CHECK
 ========================= */
-async function checkAdmin() {
+async function checkAdminWithData(data) {
   const panel = document.getElementById("adminPanel");
   const settingsPanel = document.getElementById("pointSettingsPanel");
   
   try {
-    const leagueDoc = await getDoc(doc(db, "leagues", activeLeagueId));
-    const isAdmin = leagueDoc.exists() && leagueDoc.data().ownerId === auth.currentUser.uid;
+    const isAdmin = data.league && data.league.ownerId === auth.currentUser.uid;
     
     panel.style.display = isAdmin ? "block" : "none";
     settingsPanel.style.display = isAdmin ? "block" : "none";
@@ -477,6 +584,11 @@ async function checkAdmin() {
   }
 }
 
+async function checkAdmin() {
+  const data = await fetchLeagueData(activeLeagueId);
+  await checkAdminWithData(data);
+}
+
 document.getElementById("savePointSettingsBtn")?.addEventListener("click", async () => {
   const settings = {
     exactScore: parseInt(document.getElementById("pointExactScore").value) || 5,
@@ -492,6 +604,7 @@ document.getElementById("savePointSettingsBtn")?.addEventListener("click", async
     });
     
     currentLeagueSettings = settings;
+    clearCache();
     alert("Stigastillingar vistaðar!");
   } catch (error) {
     handleError(error, "Villa við að vista stillingar");
@@ -564,7 +677,7 @@ function getTimeUntilGame(gameTime) {
 }
 
 /* =========================
-   REIKNA STIG MEÐ NÝJU KERFI
+   REIKNA STIG
 ========================= */
 function calculatePoints(prediction, result, settings) {
   if (!prediction || !result || !prediction.includes("-") || !result.includes("-")) {
@@ -659,6 +772,7 @@ document.getElementById("addBonusQuestionBtn")?.addEventListener("click", async 
     document.getElementById("bonusQuestionPoints").value = "1";
     document.getElementById("bonusQuestionOptions").value = "";
     
+    clearCache();
     await loadBonusQuestions(currentGameForBonus);
     alert("Bónusspurning bætt við!");
   } catch (error) {
@@ -673,17 +787,17 @@ async function loadBonusQuestions(gameId) {
   container.innerHTML = "<p>Hleð spurningum...</p>";
   
   try {
-    const snap = await getDocs(query(collection(db, "bonusQuestions"), where("gameId", "==", gameId)));
+    const data = await fetchLeagueData(activeLeagueId);
+    const questions = data.bonusQuestions.filter(q => q.gameId === gameId);
     
-    if (snap.empty) {
+    if (questions.length === 0) {
       container.innerHTML = "<p>Engar bónusspurningar fyrir þennan leik</p>";
       return;
     }
     
     container.innerHTML = "";
     
-    for (let docSnap of snap.docs) {
-      const q = docSnap.data();
+    for (let q of questions) {
       const div = document.createElement("div");
       div.style.cssText = "background: white; padding: 15px; margin: 10px 0; border-radius: 8px; border-left: 4px solid #667eea;";
       
@@ -699,8 +813,8 @@ async function loadBonusQuestions(gameId) {
         <small>Tegund: ${typeLabel} | Stig: ${q.points}</small><br>
         ${q.options ? `<small>Valmöguleikar: ${q.options.join(", ")}</small><br>` : ''}
         ${q.correctAnswer ? `<small style="color: green;">Rétt svar: ${q.correctAnswer}</small><br>` : '<small style="color: orange;">Rétt svar ekki sett</small><br>'}
-        <button onclick="setBonusAnswer('${docSnap.id}')">Setja rétt svar</button>
-        <button onclick="deleteBonusQuestion('${docSnap.id}')" style="background: #dc3545;">Eyða</button>
+        <button onclick="setBonusAnswer('${q.id}')">Setja rétt svar</button>
+        <button onclick="deleteBonusQuestion('${q.id}')" style="background: #dc3545;">Eyða</button>
       `;
       container.appendChild(div);
     }
@@ -720,6 +834,7 @@ window.setBonusAnswer = async (questionId) => {
       correctAnswer: answer.trim()
     });
     
+    clearCache();
     await loadBonusQuestions(currentGameForBonus);
     await updateBonusPoints(currentGameForBonus);
     alert("Rétt svar sett og stig uppfærð!");
@@ -735,17 +850,16 @@ window.deleteBonusQuestion = async (questionId) => {
   
   showLoading(true);
   try {
-    // Eyða öllum svorunum við spurningunni
     const answersSnap = await getDocs(query(collection(db, "bonusAnswers"), where("questionId", "==", questionId)));
     
-    // Nota batch til að eyða mörgum í einu
     const batch = writeBatch(db);
-    answersSnap.docs.forEach(doc => {
-      batch.delete(doc.ref);
+    answersSnap.docs.forEach(docSnap => {
+      batch.delete(docSnap.ref);
     });
     batch.delete(doc(db, "bonusQuestions", questionId));
     await batch.commit();
     
+    clearCache();
     await loadBonusQuestions(currentGameForBonus);
     await recalculateAllPoints();
     alert("Spurningu eytt!");
@@ -758,20 +872,17 @@ window.deleteBonusQuestion = async (questionId) => {
 
 async function updateBonusPoints(gameId) {
   try {
-    const questionsSnap = await getDocs(query(collection(db, "bonusQuestions"), where("gameId", "==", gameId)));
+    const data = await fetchLeagueData(activeLeagueId);
+    const questions = data.bonusQuestions.filter(q => q.gameId === gameId && q.correctAnswer);
     
     const batch = writeBatch(db);
     let batchCount = 0;
-    const MAX_BATCH = 500; // Firestore limit
+    const MAX_BATCH = 500;
     
-    for (let qDoc of questionsSnap.docs) {
-      const question = qDoc.data();
-      if (!question.correctAnswer) continue;
+    for (let question of questions) {
+      const answers = data.bonusAnswers.filter(a => a.questionId === question.id);
       
-      const answersSnap = await getDocs(query(collection(db, "bonusAnswers"), where("questionId", "==", qDoc.id)));
-      
-      for (let aDoc of answersSnap.docs) {
-        const answer = aDoc.data();
+      for (let answer of answers) {
         let points = 0;
         
         if (question.type === "number") {
@@ -784,10 +895,9 @@ async function updateBonusPoints(gameId) {
           }
         }
         
-        batch.update(doc(db, "bonusAnswers", aDoc.id), { points });
+        batch.update(doc(db, "bonusAnswers", answer.id), { points });
         batchCount++;
         
-        // Ef við náum Firestore limitinu, commit og byrja nýjan batch
         if (batchCount >= MAX_BATCH) {
           await batch.commit();
           batchCount = 0;
@@ -799,6 +909,7 @@ async function updateBonusPoints(gameId) {
       await batch.commit();
     }
     
+    clearCache();
     await recalculateAllPoints();
   } catch (error) {
     console.error("Villa við að uppfæra bónusstig:", error);
@@ -808,36 +919,28 @@ async function updateBonusPoints(gameId) {
 
 async function recalculateAllPoints() {
   try {
-    const membersSnap = await getDocs(query(collection(db, "leagueMembers"), where("leagueId", "==", activeLeagueId)));
+    const data = await fetchLeagueData(activeLeagueId);
     
     const batch = writeBatch(db);
     
-    for (let m of membersSnap.docs) {
-      const userId = m.data().userId;
+    for (let member of data.members) {
+      const userId = member.userId;
       
-      const tipsSnap = await getDocs(query(
-        collection(db, "tips"), 
-        where("userId", "==", userId), 
-        where("leagueId", "==", activeLeagueId)
-      ));
-      let totalPoints = 0;
-      tipsSnap.forEach(tip => totalPoints += (tip.data().points || 0));
+      const userTips = data.tips.filter(tip => tip.userId === userId);
+      let totalPoints = userTips.reduce((sum, tip) => sum + (tip.points || 0), 0);
       
-      const bonusSnap = await getDocs(query(
-        collection(db, "bonusAnswers"), 
-        where("userId", "==", userId), 
-        where("leagueId", "==", activeLeagueId)
-      ));
-      bonusSnap.forEach(bonus => totalPoints += (bonus.data().points || 0));
+      const userBonusAnswers = data.bonusAnswers.filter(a => a.userId === userId);
+      totalPoints += userBonusAnswers.reduce((sum, a) => sum + (a.points || 0), 0);
       
-      batch.update(doc(db, "leagueMembers", m.id), { 
+      batch.update(doc(db, "leagueMembers", member.id), { 
         points: totalPoints,
         lastUpdated: Timestamp.now()
       });
     }
     
     await batch.commit();
-    await loadScores();
+    clearCache();
+    await loadAllLeagueData();
   } catch (error) {
     console.error("Villa við að endurreikna stig:", error);
     throw error;
@@ -845,291 +948,258 @@ async function recalculateAllPoints() {
 }
 
 /* =========================
-   LEIKIR + BÓNUSSPURNINGAR
+   RENDER GAMES
 ========================= */
-async function loadGames() {
+async function renderGames(data) {
   const list = document.getElementById("gamesList");
   const resultSelect = document.getElementById("resultGameSelect");
   const bonusSelect = document.getElementById("bonusGameSelect");
   const deleteSelect = document.getElementById("deleteGameSelect");
   
-  list.innerHTML = "<li>Hleð leikjum...</li>";
+  list.innerHTML = "";
   resultSelect.innerHTML = '<option value="">Veldu leik</option>';
   bonusSelect.innerHTML = '<option value="">Veldu leik</option>';
   deleteSelect.innerHTML = '<option value="">Veldu leik til að eyða</option>';
 
-  try {
-    const snap = await getDocs(query(collection(db, "games"), where("leagueId", "==", activeLeagueId)));
+  if (data.games.length === 0) {
+    list.innerHTML = "<li>Engir leikir í þessari deild</li>";
+    return;
+  }
+  
+  const games = [...data.games].sort((a, b) => {
+    if (!a.gameTime && !b.gameTime) return 0;
+    if (!a.gameTime) return 1;
+    if (!b.gameTime) return -1;
+    return a.gameTime.toMillis() - b.gameTime.toMillis();
+  });
+  
+  const tipsMap = new Map();
+  data.tips.forEach(tip => {
+    const key = `${tip.gameId}_${tip.userId}`;
+    tipsMap.set(key, tip);
+  });
+  
+  const membersMap = new Map();
+  data.members.forEach(member => {
+    membersMap.set(member.userId, member);
+  });
+  
+  const bonusQuestionsMap = new Map();
+  data.bonusQuestions.forEach(q => {
+    if (!bonusQuestionsMap.has(q.gameId)) {
+      bonusQuestionsMap.set(q.gameId, []);
+    }
+    bonusQuestionsMap.get(q.gameId).push(q);
+  });
+  
+  const bonusAnswersMap = new Map();
+  data.bonusAnswers.forEach(a => {
+    if (!bonusAnswersMap.has(a.questionId)) {
+      bonusAnswersMap.set(a.questionId, []);
+    }
+    bonusAnswersMap.get(a.questionId).push(a);
+  });
+  
+  let hasShownUpcomingHeader = false;
+  let hasShownPastHeader = false;
+
+  for (let game of games) {
+    const canUserTip = canTip(game.gameTime);
+    const gameStarted = hasGameStarted(game.gameTime);
+    const timeInfo = game.gameTime ? getTimeUntilGame(game.gameTime) : "";
     
-    if (snap.empty) {
-      list.innerHTML = "<li>Engir leikir í þessari deild</li>";
-      return;
+    if (!gameStarted && !hasShownUpcomingHeader && game.gameTime) {
+      const headerLi = document.createElement("li");
+      headerLi.style.cssText = "background: #4CAF50; color: white; font-weight: bold; padding: 10px; margin: 20px 0 10px 0; border-radius: 5px; text-align: center;";
+      headerLi.innerHTML = "⚽ KOMANDI LEIKIR";
+      list.appendChild(headerLi);
+      hasShownUpcomingHeader = true;
     }
     
-    // Raða leikjum eftir gameTime
-    const games = snap.docs.map(doc => ({
-      id: doc.id,
-      data: doc.data()
-    }));
+    if (gameStarted && !hasShownPastHeader) {
+      const headerLi = document.createElement("li");
+      headerLi.style.cssText = "background: #9E9E9E; color: white; font-weight: bold; padding: 10px; margin: 20px 0 10px 0; border-radius: 5px; text-align: center;";
+      headerLi.innerHTML = "📋 LIÐNIR LEIKIR";
+      list.appendChild(headerLi);
+      hasShownPastHeader = true;
+    }
     
-    games.sort((a, b) => {
-      // Ef annar eða báðir hafa ekki gameTime, setja þá aftast
-      if (!a.data.gameTime && !b.data.gameTime) return 0;
-      if (!a.data.gameTime) return 1;
-      if (!b.data.gameTime) return -1;
+    const li = document.createElement("li");
+    
+    let html = `
+      <strong>${game.homeTeam} vs ${game.awayTeam}</strong><br>
+      ${game.gameTime ? `<small>${formatDateTime(game.gameTime)} (${timeInfo})</small><br>` : ''}
+    `;
+    
+    if (gameStarted) {
+      const gameTips = data.tips.filter(tip => tip.gameId === game.id);
       
-      // Raða eftir gameTime (elstu fyrst)
-      return a.data.gameTime.toMillis() - b.data.gameTime.toMillis();
-    });
-    
-    list.innerHTML = "";
-    
-    let hasShownUpcomingHeader = false;
-    let hasShownPastHeader = false;
-    const now = new Date();
-
-    for (let gameObj of games) {
-      const gameId = gameObj.id;
-      const game = gameObj.data;
-      const canUserTip = canTip(game.gameTime);
-      const gameStarted = hasGameStarted(game.gameTime);
-      const timeInfo = game.gameTime ? getTimeUntilGame(game.gameTime) : "";
-      
-      // Bæta við header fyrir komandi leiki
-      if (!gameStarted && !hasShownUpcomingHeader && game.gameTime) {
-        const headerLi = document.createElement("li");
-        headerLi.style.cssText = "background: #4CAF50; color: white; font-weight: bold; padding: 10px; margin: 20px 0 10px 0; border-radius: 5px; text-align: center;";
-        headerLi.innerHTML = "⚽ KOMANDI LEIKIR";
-        list.appendChild(headerLi);
-        hasShownUpcomingHeader = true;
+      if (gameTips.length > 0) {
+        html += `<div style="margin-top: 10px; padding: 10px; background: #f0f4ff; border-radius: 5px;">
+          <strong>Tipp:</strong><br>`;
+        
+        for (let tip of gameTips) {
+          const member = membersMap.get(tip.userId);
+          const username = member ? member.username : "Óþekktur";
+          const isCurrentUser = tip.userId === auth.currentUser.uid;
+          
+          html += `<small style="${isCurrentUser ? 'font-weight: bold; color: #667eea;' : ''}">${username}: ${tip.prediction}${tip.points > 0 ? ` (${tip.points} stig)` : ''}</small><br>`;
+        }
+        
+        html += `</div>`;
       }
       
-      // Bæta við header fyrir liðna leiki
-      if (gameStarted && !hasShownPastHeader) {
-        const headerLi = document.createElement("li");
-        headerLi.style.cssText = "background: #9E9E9E; color: white; font-weight: bold; padding: 10px; margin: 20px 0 10px 0; border-radius: 5px; text-align: center;";
-        headerLi.innerHTML = "📋 LIÐNIR LEIKIR";
-        list.appendChild(headerLi);
-        hasShownPastHeader = true;
+      if (game.result) {
+        html += `<div style="margin-top: 10px;"><strong style="color: green;">Úrslit: ${game.result}</strong></div>`;
       }
       
-      const li = document.createElement("li");
+      html += renderBonusAnswersForGame(game.id, bonusQuestionsMap, bonusAnswersMap, membersMap);
+    } else {
+      const existingTip = tipsMap.get(`${game.id}_${auth.currentUser.uid}`);
       
-      let html = `
-        <strong>${game.homeTeam} vs ${game.awayTeam}</strong><br>
-        ${game.gameTime ? `<small>${formatDateTime(game.gameTime)} (${timeInfo})</small><br>` : ''}
+      let homeValue = '';
+      let awayValue = '';
+      let buttonText = 'Tippa';
+      
+      if (existingTip) {
+        const [home, away] = existingTip.prediction.split('-');
+        homeValue = home;
+        awayValue = away;
+        buttonText = 'Uppfæra tip';
+      }
+      
+      html += `
+        <div style="margin-top: 10px;">
+          ${existingTip ? `<div style="background: #e8f5e9; padding: 8px; border-radius: 5px; margin-bottom: 8px;">
+            <strong style="color: #2e7d32;">✓ Þitt tip: ${existingTip.prediction}</strong>
+            ${canUserTip ? '<br><small>Þú getur breytt þessu hvenær sem er</small>' : ''}
+          </div>` : ''}
+          <input id="tipHome_${game.id}" type="number" placeholder="${game.homeTeam}" 
+            value="${homeValue}" style="width: 60px;" ${!canUserTip ? 'disabled' : ''}>
+          <span style="margin: 0 5px;">-</span>
+          <input id="tipAway_${game.id}" type="number" placeholder="${game.awayTeam}" 
+            value="${awayValue}" style="width: 60px;" ${!canUserTip ? 'disabled' : ''}>
+          <button id="tipBtn_${game.id}" ${!canUserTip ? 'disabled' : ''}>${buttonText}</button>
+          ${!canUserTip ? '<br><span style="color: red;">Of seint að tippa</span>' : ''}
+        </div>
       `;
       
-      if (gameStarted) {
-        const tipsSnap = await getDocs(query(collection(db, "tips"), where("gameId", "==", gameId)));
-        
-        if (!tipsSnap.empty) {
-          html += `<div style="margin-top: 10px; padding: 10px; background: #f0f4ff; border-radius: 5px;">
-            <strong>Tipp:</strong><br>`;
-          
-          for (let tipDoc of tipsSnap.docs) {
-            const tip = tipDoc.data();
-            const memberSnap = await getDocs(query(
-              collection(db, "leagueMembers"), 
-              where("userId", "==", tip.userId),
-              where("leagueId", "==", activeLeagueId)
-            ));
-            
-            const username = memberSnap.empty ? "Óþekktur" : memberSnap.docs[0].data().username;
-            const isCurrentUser = tip.userId === auth.currentUser.uid;
-            
-            html += `<small style="${isCurrentUser ? 'font-weight: bold; color: #667eea;' : ''}">${username}: ${tip.prediction}${tip.points > 0 ? ` (${tip.points} stig)` : ''}</small><br>`;
-          }
-          
-          html += `</div>`;
-        }
-        
-        if (game.result) {
-          html += `<div style="margin-top: 10px;"><strong style="color: green;">Úrslit: ${game.result}</strong></div>`;
-        }
-        
-        html += await loadBonusAnswersForGame(gameId, gameStarted);
-      } else {
-        // Athuga hvort notandi hafi þegar tippað
-        const existingTipDoc = await getDoc(doc(db, "tips", `${gameId}_${auth.currentUser.uid}`));
-        const existingTip = existingTipDoc.exists() ? existingTipDoc.data() : null;
-        
-        let homeValue = '';
-        let awayValue = '';
-        let buttonText = 'Tippa';
-        
-        if (existingTip) {
-          const [home, away] = existingTip.prediction.split('-');
-          homeValue = home;
-          awayValue = away;
-          buttonText = 'Uppfæra tip';
-        }
-        
-        html += `
-          <div style="margin-top: 10px;">
-            ${existingTip ? `<div style="background: #e8f5e9; padding: 8px; border-radius: 5px; margin-bottom: 8px;">
-              <strong style="color: #2e7d32;">✓ Þitt tip: ${existingTip.prediction}</strong>
-              ${canUserTip ? '<br><small>Þú getur breytt þessu hvenær sem er</small>' : ''}
-            </div>` : ''}
-            <input id="tipHome_${gameId}" type="number" placeholder="${game.homeTeam}" 
-              value="${homeValue}" style="width: 60px;" ${!canUserTip ? 'disabled' : ''}>
-            <span style="margin: 0 5px;">-</span>
-            <input id="tipAway_${gameId}" type="number" placeholder="${game.awayTeam}" 
-              value="${awayValue}" style="width: 60px;" ${!canUserTip ? 'disabled' : ''}>
-            <button id="tipBtn_${gameId}" ${!canUserTip ? 'disabled' : ''}>${buttonText}</button>
-            ${!canUserTip ? '<br><span style="color: red;">Of seint að tippa</span>' : ''}
-          </div>
-        `;
-        
-        html += await loadBonusQuestionsForGame(gameId, canUserTip);
-      }
-      
-      li.innerHTML = html;
-      list.appendChild(li);
-      
-      if (!gameStarted) {
-        document.getElementById(`tipBtn_${gameId}`)?.addEventListener('click', () => submitTip(gameId));
-        await attachBonusEventListeners(gameId);
-      }
-
-      const opt = document.createElement("option");
-      opt.value = gameId;
-      const dateStr = game.gameTime ? formatDateTime(game.gameTime).split(' kl.')[0] : 'Engin tími';
-      opt.textContent = `${dateStr} - ${game.homeTeam} vs ${game.awayTeam}`;
-      resultSelect.appendChild(opt);
-      bonusSelect.appendChild(opt.cloneNode(true));
-      deleteSelect.appendChild(opt.cloneNode(true));
+      html += renderBonusQuestionsForGame(game.id, canUserTip, bonusQuestionsMap, bonusAnswersMap);
     }
-  } catch (error) {
-    handleError(error, "Villa við að hlaða leikjum");
-    list.innerHTML = "<li>Villa við að hlaða leiki</li>";
+    
+    li.innerHTML = html;
+    list.appendChild(li);
+    
+    if (!gameStarted) {
+      document.getElementById(`tipBtn_${game.id}`)?.addEventListener('click', () => submitTip(game.id));
+      attachBonusEventListenersForGame(game.id, bonusQuestionsMap);
+    }
+
+    const opt = document.createElement("option");
+    opt.value = game.id;
+    const dateStr = game.gameTime ? formatDateTime(game.gameTime).split(' kl.')[0] : 'Engin tími';
+    opt.textContent = `${dateStr} - ${game.homeTeam} vs ${game.awayTeam}`;
+    resultSelect.appendChild(opt);
+    bonusSelect.appendChild(opt.cloneNode(true));
+    deleteSelect.appendChild(opt.cloneNode(true));
   }
 }
 
-async function loadBonusQuestionsForGame(gameId, canAnswer) {
-  try {
-    const questionsSnap = await getDocs(query(collection(db, "bonusQuestions"), where("gameId", "==", gameId)));
-    
-    if (questionsSnap.empty) return "";
-    
-    let html = `<div style="margin-top: 15px; padding: 10px; background: #fff3cd; border-radius: 5px; border-left: 4px solid #ffc107;">
-      <strong>🎁 Bónusspurningar:</strong><br><br>`;
-    
-    for (let qDoc of questionsSnap.docs) {
-      const q = qDoc.data();
-      const qId = qDoc.id;
-      
-      const existingAnswerSnap = await getDocs(query(
-        collection(db, "bonusAnswers"),
-        where("questionId", "==", qId),
-        where("userId", "==", auth.currentUser.uid)
-      ));
-      
-      const existingAnswer = existingAnswerSnap.empty ? "" : existingAnswerSnap.docs[0].data().answer;
-      
-      html += `<div style="margin-bottom: 15px;">
-        <strong>${q.question}</strong> <small>(${q.points} stig)</small><br>`;
-      
-      if (q.type === "text" || q.type === "number") {
-        html += `<input id="bonus_${qId}" type="${q.type === 'number' ? 'number' : 'text'}" 
-          placeholder="Svarið þitt" value="${existingAnswer}" ${!canAnswer ? 'disabled' : ''}>`;
-      } else if (q.type === "yesNo") {
-        html += `
-          <select id="bonus_${qId}" ${!canAnswer ? 'disabled' : ''}>
-            <option value="">Veldu</option>
-            <option value="Já" ${existingAnswer === 'Já' ? 'selected' : ''}>Já</option>
-            <option value="Nei" ${existingAnswer === 'Nei' ? 'selected' : ''}>Nei</option>
-          </select>`;
-      } else if (q.type === "multipleChoice" && q.options) {
-        html += `<select id="bonus_${qId}" ${!canAnswer ? 'disabled' : ''}>
-          <option value="">Veldu</option>`;
-        q.options.forEach(opt => {
-          html += `<option value="${opt}" ${existingAnswer === opt ? 'selected' : ''}>${opt}</option>`;
-        });
-        html += `</select>`;
-      }
-      
-      html += `<button id="bonusBtn_${qId}" ${!canAnswer ? 'disabled' : ''}>Vista svar</button>
-        ${existingAnswer ? `<small style="color: green;"> ✓ Þú hefur svarað: ${existingAnswer}</small>` : ''}
-      </div>`;
-    }
-    
-    html += `${!canAnswer ? '<small style="color: red;">Of seint að svara bónusspurningum</small>' : ''}</div>`;
-    
-    return html;
-  } catch (error) {
-    console.error("Villa við að hlaða bónusspurningum:", error);
-    return "";
-  }
+async function loadGames() {
+  const data = await fetchLeagueData(activeLeagueId);
+  await renderGames(data);
 }
 
-async function loadBonusAnswersForGame(gameId, gameStarted) {
-  if (!gameStarted) return "";
+function renderBonusQuestionsForGame(gameId, canAnswer, bonusQuestionsMap, bonusAnswersMap) {
+  const questions = bonusQuestionsMap.get(gameId) || [];
   
-  try {
-    const questionsSnap = await getDocs(query(collection(db, "bonusQuestions"), where("gameId", "==", gameId)));
+  if (questions.length === 0) return "";
+  
+  let html = `<div style="margin-top: 15px; padding: 10px; background: #fff3cd; border-radius: 5px; border-left: 4px solid #ffc107;">
+    <strong>🎁 Bónusspurningar:</strong><br><br>`;
+  
+  for (let q of questions) {
+    const userAnswers = (bonusAnswersMap.get(q.id) || []).filter(a => a.userId === auth.currentUser.uid);
+    const existingAnswer = userAnswers.length > 0 ? userAnswers[0].answer : "";
     
-    if (questionsSnap.empty) return "";
+    html += `<div style="margin-bottom: 15px;">
+      <strong>${q.question}</strong> <small>(${q.points} stig)</small><br>`;
     
-    let html = `<div style="margin-top: 15px; padding: 10px; background: #fff3cd; border-radius: 5px; border-left: 4px solid #ffc107;">
-      <strong>🎁 Bónusspurningar:</strong><br><br>`;
+    if (q.type === "text" || q.type === "number") {
+      html += `<input id="bonus_${q.id}" type="${q.type === 'number' ? 'number' : 'text'}" 
+        placeholder="Svarið þitt" value="${existingAnswer}" ${!canAnswer ? 'disabled' : ''}>`;
+    } else if (q.type === "yesNo") {
+      html += `
+        <select id="bonus_${q.id}" ${!canAnswer ? 'disabled' : ''}>
+          <option value="">Veldu</option>
+          <option value="Já" ${existingAnswer === 'Já' ? 'selected' : ''}>Já</option>
+          <option value="Nei" ${existingAnswer === 'Nei' ? 'selected' : ''}>Nei</option>
+        </select>`;
+    } else if (q.type === "multipleChoice" && q.options) {
+      html += `<select id="bonus_${q.id}" ${!canAnswer ? 'disabled' : ''}>
+        <option value="">Veldu</option>`;
+      q.options.forEach(opt => {
+        html += `<option value="${opt}" ${existingAnswer === opt ? 'selected' : ''}>${opt}</option>`;
+      });
+      html += `</select>`;
+    }
     
-    for (let qDoc of questionsSnap.docs) {
-      const q = qDoc.data();
-      const qId = qDoc.id;
-      
-      html += `<div style="margin-bottom: 15px;">
-        <strong>${q.question}</strong><br>`;
-      
-      if (q.correctAnswer) {
-        html += `<small style="color: green;">Rétt svar: ${q.correctAnswer}</small><br>`;
+    html += `<button id="bonusBtn_${q.id}" ${!canAnswer ? 'disabled' : ''}>Vista svar</button>
+      ${existingAnswer ? `<small style="color: green;"> ✓ Þú hefur svarað: ${existingAnswer}</small>` : ''}
+    </div>`;
+  }
+  
+  html += `${!canAnswer ? '<small style="color: red;">Of seint að svara bónusspurningum</small>' : ''}</div>`;
+  
+  return html;
+}
+
+function renderBonusAnswersForGame(gameId, bonusQuestionsMap, bonusAnswersMap, membersMap) {
+  const questions = bonusQuestionsMap.get(gameId) || [];
+  
+  if (questions.length === 0) return "";
+  
+  let html = `<div style="margin-top: 15px; padding: 10px; background: #fff3cd; border-radius: 5px; border-left: 4px solid #ffc107;">
+    <strong>🎁 Bónusspurningar:</strong><br><br>`;
+  
+  for (let q of questions) {
+    html += `<div style="margin-bottom: 15px;">
+      <strong>${q.question}</strong><br>`;
+    
+    if (q.correctAnswer) {
+      html += `<small style="color: green;">Rétt svar: ${q.correctAnswer}</small><br>`;
+    }
+    
+    const answers = bonusAnswersMap.get(q.id) || [];
+    
+    if (answers.length > 0) {
+      html += `<small>Svör:</small><br>`;
+      for (let answer of answers) {
+        const member = membersMap.get(answer.userId);
+        const username = member ? member.username : "Óþekktur";
+        const isCurrentUser = answer.userId === auth.currentUser.uid;
+        const isCorrect = q.correctAnswer && answer.answer.toLowerCase().trim() === q.correctAnswer.toLowerCase().trim();
+        
+        html += `<small style="${isCurrentUser ? 'font-weight: bold; color: #667eea;' : ''}">${username}: ${answer.answer}${isCorrect ? ' ✓' : ''}${answer.points > 0 ? ` (+${answer.points} stig)` : ''}</small><br>`;
       }
-      
-      const answersSnap = await getDocs(query(collection(db, "bonusAnswers"), where("questionId", "==", qId)));
-      
-      if (!answersSnap.empty) {
-        html += `<small>Svör:</small><br>`;
-        for (let aDoc of answersSnap.docs) {
-          const answer = aDoc.data();
-          const memberSnap = await getDocs(query(
-            collection(db, "leagueMembers"),
-            where("userId", "==", answer.userId),
-            where("leagueId", "==", activeLeagueId)
-          ));
-          
-          const username = memberSnap.empty ? "Óþekktur" : memberSnap.docs[0].data().username;
-          const isCurrentUser = answer.userId === auth.currentUser.uid;
-          const isCorrect = q.correctAnswer && answer.answer.toLowerCase().trim() === q.correctAnswer.toLowerCase().trim();
-          
-          html += `<small style="${isCurrentUser ? 'font-weight: bold; color: #667eea;' : ''}">${username}: ${answer.answer}${isCorrect ? ' ✓' : ''}${answer.points > 0 ? ` (+${answer.points} stig)` : ''}</small><br>`;
-        }
-      }
-      
-      html += `</div>`;
     }
     
     html += `</div>`;
-    
-    return html;
-  } catch (error) {
-    console.error("Villa við að hlaða bónussvar:", error);
-    return "";
   }
+  
+  html += `</div>`;
+  
+  return html;
 }
 
-async function attachBonusEventListeners(gameId) {
-  try {
-    const questionsSnap = await getDocs(query(collection(db, "bonusQuestions"), where("gameId", "==", gameId)));
-    
-    for (let qDoc of questionsSnap.docs) {
-      const qId = qDoc.id;
-      const btn = document.getElementById(`bonusBtn_${qId}`);
-      if (btn) {
-        btn.addEventListener('click', () => submitBonusAnswer(qId, gameId));
-      }
+function attachBonusEventListenersForGame(gameId, bonusQuestionsMap) {
+  const questions = bonusQuestionsMap.get(gameId) || [];
+  
+  for (let q of questions) {
+    const btn = document.getElementById(`bonusBtn_${q.id}`);
+    if (btn) {
+      btn.addEventListener('click', () => submitBonusAnswer(q.id, gameId));
     }
-  } catch (error) {
-    console.error("Villa við að tengja event listeners:", error);
   }
 }
 
@@ -1142,8 +1212,10 @@ async function submitBonusAnswer(questionId, gameId) {
   
   showLoading(true);
   try {
-    const gameDoc = await getDoc(doc(db, "games", gameId));
-    if (gameDoc.exists() && !canTip(gameDoc.data().gameTime)) {
+    const data = await fetchLeagueData(activeLeagueId);
+    const game = data.games.find(g => g.id === gameId);
+    
+    if (game && !canTip(game.gameTime)) {
       alert("Of seint að svara bónusspurningu!");
       return;
     }
@@ -1160,8 +1232,9 @@ async function submitBonusAnswer(questionId, gameId) {
       answeredAt: Timestamp.now()
     });
     
+    clearCache();
     alert("Svar vistað!");
-    await loadGames();
+    await loadAllLeagueData();
   } catch (error) {
     handleError(error, "Villa við að vista svar");
   } finally {
@@ -1184,15 +1257,16 @@ async function submitTip(gameId) {
   
   showLoading(true);
   try {
-    const gameDoc = await getDoc(doc(db, "games", gameId));
-    if (gameDoc.exists() && !canTip(gameDoc.data().gameTime)) {
+    const data = await fetchLeagueData(activeLeagueId);
+    const game = data.games.find(g => g.id === gameId);
+    
+    if (game && !canTip(game.gameTime)) {
       alert("Of seint að tippa á þennan leik!");
       return;
     }
     
-    // Athuga hvort þetta er uppfærsla eða nýtt tip
-    const existingTipDoc = await getDoc(doc(db, "tips", `${gameId}_${auth.currentUser.uid}`));
-    const isUpdate = existingTipDoc.exists();
+    const existingTip = data.tips.find(t => t.gameId === gameId && t.userId === auth.currentUser.uid);
+    const isUpdate = !!existingTip;
 
     await setDoc(doc(db, "tips", `${gameId}_${auth.currentUser.uid}`), {
       gameId,
@@ -1203,8 +1277,9 @@ async function submitTip(gameId) {
       tippedAt: Timestamp.now()
     });
 
+    clearCache();
     alert(isUpdate ? "Tip uppfært! ✓" : "Tip skráð! ✓");
-    await loadGames();
+    await loadAllLeagueData();
   } catch (error) {
     handleError(error, "Villa við að skrá tip");
   } finally {
@@ -1241,7 +1316,8 @@ document.getElementById("createGameAdminBtn")?.addEventListener("click", async (
     document.getElementById("adminAwayTeam").value = "";
     document.getElementById("adminGameTime").value = "";
     
-    await loadGames();
+    clearCache();
+    await loadAllLeagueData();
     alert("Leikur búinn til");
   } catch (error) {
     handleError(error, "Villa við að búa til leik");
@@ -1260,28 +1336,24 @@ document.getElementById("deleteGameBtn")?.addEventListener("click", async () => 
   try {
     const batch = writeBatch(db);
     
-    // Eyða öllum tippum
     const tipsSnap = await getDocs(query(collection(db, "tips"), where("gameId", "==", gameId)));
-    tipsSnap.docs.forEach(doc => batch.delete(doc.ref));
+    tipsSnap.docs.forEach(docSnap => batch.delete(docSnap.ref));
     
-    // Eyða öllum bónusspurningum og svorunum
     const bonusQSnap = await getDocs(query(collection(db, "bonusQuestions"), where("gameId", "==", gameId)));
     for (let qDoc of bonusQSnap.docs) {
       const answersSnap = await getDocs(query(collection(db, "bonusAnswers"), where("questionId", "==", qDoc.id)));
-      answersSnap.docs.forEach(doc => batch.delete(doc.ref));
+      answersSnap.docs.forEach(docSnap => batch.delete(docSnap.ref));
       batch.delete(qDoc.ref);
     }
     
-    // Eyða leiknum
     batch.delete(doc(db, "games", gameId));
     
     await batch.commit();
     
-    // Uppfæra stig
+    clearCache();
     await recalculateAllPoints();
     
     alert("Leik eytt!");
-    await loadGames();
   } catch (error) {
     handleError(error, "Villa við að eyða leik");
   } finally {
@@ -1295,25 +1367,18 @@ document.getElementById("viewMembersBtn")?.addEventListener("click", async () =>
   container.style.display = "block";
   
   try {
-    const membersSnap = await getDocs(query(collection(db, "leagueMembers"), where("leagueId", "==", activeLeagueId)));
-    const leagueSnap = await getDoc(doc(db, "leagues", activeLeagueId));
+    const data = await fetchLeagueData(activeLeagueId);
     
-    if (!leagueSnap.exists()) {
-      container.innerHTML = "<p>Deild fannst ekki</p>";
-      return;
-    }
-    
-    const ownerId = leagueSnap.data().ownerId;
-    
-    if (membersSnap.empty) {
+    if (data.members.length === 0) {
       container.innerHTML = "<p>Engir notendur í deild</p>";
       return;
     }
     
+    const ownerId = data.league?.ownerId;
+    
     container.innerHTML = "";
     
-    for (let memberDoc of membersSnap.docs) {
-      const member = memberDoc.data();
+    for (let member of data.members) {
       const isOwner = member.userId === ownerId;
       
       const div = document.createElement("div");
@@ -1325,7 +1390,7 @@ document.getElementById("viewMembersBtn")?.addEventListener("click", async () =>
           ${isOwner ? '<span style="color: #ffc107; margin-left: 10px;">👑 Stjórnandi</span>' : ''}
           <br><small style="color: #666;">${member.points} stig</small>
         </div>
-        ${!isOwner ? `<button onclick="removeMember('${memberDoc.id}', '${member.username}')" style="background: #dc3545; padding: 8px 16px;">Fjarlægja</button>` : ''}
+        ${!isOwner ? `<button onclick="removeMember('${member.id}', '${member.username}')" style="background: #dc3545; padding: 8px 16px;">Fjarlægja</button>` : ''}
       `;
       
       container.appendChild(div);
@@ -1351,31 +1416,29 @@ window.removeMember = async (memberId, username) => {
     
     const batch = writeBatch(db);
     
-    // Eyða öllum tippum
     const tipsSnap = await getDocs(query(
       collection(db, "tips"),
       where("userId", "==", userId),
       where("leagueId", "==", activeLeagueId)
     ));
-    tipsSnap.docs.forEach(doc => batch.delete(doc.ref));
+    tipsSnap.docs.forEach(docSnap => batch.delete(docSnap.ref));
     
-    // Eyða öllum bónussvorunum
     const answersSnap = await getDocs(query(
       collection(db, "bonusAnswers"),
       where("userId", "==", userId),
       where("leagueId", "==", activeLeagueId)
     ));
-    answersSnap.docs.forEach(doc => batch.delete(doc.ref));
+    answersSnap.docs.forEach(docSnap => batch.delete(docSnap.ref));
     
-    // Eyða notandanum
     batch.delete(doc(db, "leagueMembers", memberId));
     
     await batch.commit();
     
+    clearCache();
     alert(`${username} hefur verið fjarlægður úr deildinni`);
     
     document.getElementById("viewMembersBtn").click();
-    await loadScores();
+    await loadAllLeagueData();
   } catch (error) {
     handleError(error, "Villa við að fjarlægja notanda");
   } finally {
@@ -1384,13 +1447,14 @@ window.removeMember = async (memberId, username) => {
 };
 
 document.getElementById("deleteLeagueBtn")?.addEventListener("click", async () => {
-  const leagueDoc = await getDoc(doc(db, "leagues", activeLeagueId));
-  if (!leagueDoc.exists()) {
+  const data = await fetchLeagueData(activeLeagueId);
+  
+  if (!data.league) {
     alert("Deild fannst ekki");
     return;
   }
   
-  const leagueName = leagueDoc.data().name;
+  const leagueName = data.league.name;
   
   const confirmation = prompt(`VIÐVÖRUN: Þetta eyðir ÖLLU í deildinni "${leagueName}".\n\nSkrifaðu "EYÐA" til að staðfesta:`);
   
@@ -1401,36 +1465,28 @@ document.getElementById("deleteLeagueBtn")?.addEventListener("click", async () =
   
   showLoading(true);
   try {
-    // Eyða öllum leikjum og tengdum gögnum
-    const gamesSnap = await getDocs(query(collection(db, "games"), where("leagueId", "==", activeLeagueId)));
-    
-    for (let gameDoc of gamesSnap.docs) {
-      const gameId = gameDoc.id;
-      
+    for (let game of data.games) {
       const batch = writeBatch(db);
       let batchCount = 0;
       
-      // Eyða tippum
-      const tipsSnap = await getDocs(query(collection(db, "tips"), where("gameId", "==", gameId)));
-      tipsSnap.docs.forEach(doc => {
-        batch.delete(doc.ref);
+      const tipsSnap = await getDocs(query(collection(db, "tips"), where("gameId", "==", game.id)));
+      tipsSnap.docs.forEach(docSnap => {
+        batch.delete(docSnap.ref);
         batchCount++;
       });
       
-      // Eyða bónusspurningum og svorunum
-      const bonusQSnap = await getDocs(query(collection(db, "bonusQuestions"), where("gameId", "==", gameId)));
+      const bonusQSnap = await getDocs(query(collection(db, "bonusQuestions"), where("gameId", "==", game.id)));
       for (let qDoc of bonusQSnap.docs) {
         const answersSnap = await getDocs(query(collection(db, "bonusAnswers"), where("questionId", "==", qDoc.id)));
-        answersSnap.docs.forEach(doc => {
-          batch.delete(doc.ref);
+        answersSnap.docs.forEach(docSnap => {
+          batch.delete(docSnap.ref);
           batchCount++;
         });
         batch.delete(qDoc.ref);
         batchCount++;
       }
       
-      // Eyða leiknum
-      batch.delete(gameDoc.ref);
+      batch.delete(doc(db, "games", game.id));
       batchCount++;
       
       if (batchCount > 0) {
@@ -1438,18 +1494,17 @@ document.getElementById("deleteLeagueBtn")?.addEventListener("click", async () =
       }
     }
     
-    // Eyða öllum notendum
     const batch = writeBatch(db);
     const membersSnap = await getDocs(query(collection(db, "leagueMembers"), where("leagueId", "==", activeLeagueId)));
-    membersSnap.docs.forEach(doc => batch.delete(doc.ref));
+    membersSnap.docs.forEach(docSnap => batch.delete(docSnap.ref));
     
-    // Eyða deildinni
     batch.delete(doc(db, "leagues", activeLeagueId));
     
     await batch.commit();
     
     alert(`Deild "${leagueName}" hefur verið eytt`);
     
+    clearCache();
     saveActiveLeague(null);
     location.reload();
   } catch (error) {
@@ -1492,6 +1547,7 @@ document.getElementById("setResultBtn")?.addEventListener("click", async () => {
     document.getElementById("resultScoreHome").value = "";
     document.getElementById("resultScoreAway").value = "";
 
+    clearCache();
     await updateBonusPoints(gameId);
     alert("Úrslit og stig uppfærð");
   } catch (error) {
@@ -1509,34 +1565,30 @@ document.getElementById("bonusQuestionType")?.addEventListener("change", (e) => 
 });
 
 /* =========================
-   STIGATAFLA
+   RENDER SCORES
 ========================= */
-async function loadScores() {
+async function renderScores(data) {
   const ul = document.getElementById("leagueScores");
-  ul.innerHTML = "<li>Hleð stigatöflu...</li>";
-
-  try {
-    const snap = await getDocs(query(collection(db, "leagueMembers"), where("leagueId", "==", activeLeagueId)));
-    
-    if (snap.empty) {
-      ul.innerHTML = "<li>Engir notendur í deild</li>";
-      return;
-    }
-    
-    let members = snap.docs.map(d => d.data());
-    members.sort((a,b) => b.points - a.points);
-
-    ul.innerHTML = "";
-    
-    for (let data of members) {
-      const li = document.createElement("li");
-      li.textContent = `${data.username} – ${data.points} stig`;
-      ul.appendChild(li);
-    }
-  } catch (error) {
-    handleError(error, "Villa við að hlaða stigatöflu");
-    ul.innerHTML = "<li>Villa við að hlaða stigatöflu</li>";
+  
+  if (data.members.length === 0) {
+    ul.innerHTML = "<li>Engir notendur í deild</li>";
+    return;
   }
+  
+  const sortedMembers = [...data.members].sort((a, b) => b.points - a.points);
+
+  ul.innerHTML = "";
+  
+  for (let member of sortedMembers) {
+    const li = document.createElement("li");
+    li.textContent = `${member.username} – ${member.points} stig`;
+    ul.appendChild(li);
+  }
+}
+
+async function loadScores() {
+  const data = await fetchLeagueData(activeLeagueId);
+  await renderScores(data);
 }
 
 /* =========================
@@ -1577,4 +1629,4 @@ onAuthStateChanged(auth, async user => {
     document.getElementById("loggedInSection").style.display = "none";
     stopNotificationChecks();
   }
-});    
+});
