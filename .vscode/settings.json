@@ -1,0 +1,12 @@
+{
+    "files.autoSave": "afterDelay",
+    "files.autoSaveDelay": 2000,
+    "emeraldwalk.runonsave": {
+      "commands": [
+        {
+          "match": "\\.(html|js|json|css)$",
+          "cmd": "git add . && git commit -m 'auto update' && git push"
+        }
+      ]
+    }
+  }

@@ -1,0 +1,24 @@
+{
+    "name": "APB Limited Getraunaleikur EM í Handbolta",
+    "short_name": "APB Tippspil",
+    "description": "Getraunaleikur fyrir EM í Handbolta",
+    "start_url": "/",
+    "display": "standalone",
+    "background_color": "#667eea",
+    "theme_color": "#667eea",
+    "orientation": "portrait",
+    "icons": [
+      {
+        "src": "/icon-192.png",
+        "sizes": "192x192",
+        "type": "image/png",
+        "purpose": "any maskable"
+      },
+      {
+        "src": "/icon-512.png",
+        "sizes": "512x512",
+        "type": "image/png",
+        "purpose": "any maskable"
+      }
+    ]
+  }
