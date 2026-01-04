@@ -1052,7 +1052,7 @@ async function loadScores() {
 /* =========================
    AUTH
 ========================= */
-onAuthStateChanged(auth, user => { 
+onAuthStateChanged(auth, async user => { 
   if (user) {
     // Notandi er innskráður
     document.getElementById("loginSection").style.display = "none";
@@ -1066,23 +1066,27 @@ onAuthStateChanged(auth, user => {
       }
     });
     
-    // Sækja notendanafn úr fyrstu deild
-    getDocs(query(collection(db, "leagueMembers"), where("userId", "==", user.uid)))
-      .then(snap => {
-        if (!snap.empty) {
-          const username = snap.docs[0].data().username;
-          document.getElementById("loggedInUsername").textContent = username;
-        } else {
-          document.getElementById("loggedInUsername").textContent = user.email;
-        }
-      });
+    // Athuga hvort notandi er í einhverri deild
+    const memberSnap = await getDocs(query(collection(db, "leagueMembers"), where("userId", "==", user.uid)));
+    
+    if (memberSnap.empty) {
+      // Fyrsta skipti að skrá sig inn - biðja um notendanafn
+      const username = prompt("Veldu notendanafn:") || user.displayName || user.email.split("@")[0];
+      document.getElementById("loggedInUsername").textContent = username;
+      document.getElementById("username").value = username;
+    } else {
+      // Notandi er í deild - nota það notendanafn
+      const username = memberSnap.docs[0].data().username;
+      document.getElementById("loggedInUsername").textContent = username;
+      document.getElementById("username").value = username;
+    }
     
     loadUserLeagues();
-    startNotificationChecks(); // Byrja að athuga leiki
+    startNotificationChecks();
   } else {
     // Notandi er EKKI innskráður
     document.getElementById("loginSection").style.display = "block";
     document.getElementById("loggedInSection").style.display = "none";
-    stopNotificationChecks(); // Stoppa tilkynningar
+    stopNotificationChecks();
   }
 });
