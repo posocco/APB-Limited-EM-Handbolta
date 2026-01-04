@@ -6,7 +6,8 @@ import {
   signInWithEmailAndPassword,
   onAuthStateChanged,
   GoogleAuthProvider,
-  signInWithPopup
+  signInWithRedirect,
+  getRedirectResult
 } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
 
 import {
@@ -146,21 +147,30 @@ document.getElementById("loginBtn")?.addEventListener("click", async () => {
 document.getElementById("googleLoginBtn")?.addEventListener("click", async () => {
   const provider = new GoogleAuthProvider();
   try {
-    const result = await signInWithPopup(auth, provider);
-    
-    // Biðja um notendanafn ef þetta er fyrsta skráningin
-    const userSnap = await getDocs(query(collection(db, "leagueMembers"), where("userId", "==", result.user.uid)));
-    
-    if (userSnap.empty) {
-      const username = prompt("Veldu notendanafn:") || result.user.displayName || result.user.email.split("@")[0];
-      document.getElementById("username").value = username;
-    }
-    
-    alert("Skráður inn með Google!");
+    await signInWithRedirect(auth, provider);
   } catch (error) {
     alert("Villa við Google innskráningu: " + error.message);
   }
 });
+
+// Check for redirect result on page load
+getRedirectResult(auth)
+  .then(async (result) => {
+    if (result && result.user) {
+      // Biðja um notendanafn ef þetta er fyrsta skráningin
+      const userSnap = await getDocs(query(collection(db, "leagueMembers"), where("userId", "==", result.user.uid)));
+      
+      if (userSnap.empty) {
+        const username = prompt("Veldu notendanafn:") || result.user.displayName || result.user.email.split("@")[0];
+        document.getElementById("username").value = username;
+      }
+      
+      alert("Skráður inn með Google!");
+    }
+  })
+  .catch((error) => {
+    console.error("Google redirect error:", error);
+  });
 
 document.getElementById("logoutBtn")?.addEventListener("click", async () => {
   await auth.signOut();
