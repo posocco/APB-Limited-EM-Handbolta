@@ -950,14 +950,33 @@ async function loadGames() {
         
         html += await loadBonusAnswersForGame(gameId, gameStarted);
       } else {
+        // Athuga hvort notandi hafi þegar tippað
+        const existingTipDoc = await getDoc(doc(db, "tips", `${gameId}_${auth.currentUser.uid}`));
+        const existingTip = existingTipDoc.exists() ? existingTipDoc.data() : null;
+        
+        let homeValue = '';
+        let awayValue = '';
+        let buttonText = 'Tippa';
+        
+        if (existingTip) {
+          const [home, away] = existingTip.prediction.split('-');
+          homeValue = home;
+          awayValue = away;
+          buttonText = 'Uppfæra tip';
+        }
+        
         html += `
           <div style="margin-top: 10px;">
+            ${existingTip ? `<div style="background: #e8f5e9; padding: 8px; border-radius: 5px; margin-bottom: 8px;">
+              <strong style="color: #2e7d32;">✓ Þitt tip: ${existingTip.prediction}</strong>
+              ${canUserTip ? '<br><small>Þú getur breytt þessu hvenær sem er</small>' : ''}
+            </div>` : ''}
             <input id="tipHome_${gameId}" type="number" placeholder="${game.homeTeam}" 
-              style="width: 60px;" ${!canUserTip ? 'disabled' : ''}>
+              value="${homeValue}" style="width: 60px;" ${!canUserTip ? 'disabled' : ''}>
             <span style="margin: 0 5px;">-</span>
             <input id="tipAway_${gameId}" type="number" placeholder="${game.awayTeam}" 
-              style="width: 60px;" ${!canUserTip ? 'disabled' : ''}>
-            <button id="tipBtn_${gameId}" ${!canUserTip ? 'disabled' : ''}>Tippa</button>
+              value="${awayValue}" style="width: 60px;" ${!canUserTip ? 'disabled' : ''}>
+            <button id="tipBtn_${gameId}" ${!canUserTip ? 'disabled' : ''}>${buttonText}</button>
             ${!canUserTip ? '<br><span style="color: red;">Of seint að tippa</span>' : ''}
           </div>
         `;
@@ -1170,6 +1189,10 @@ async function submitTip(gameId) {
       alert("Of seint að tippa á þennan leik!");
       return;
     }
+    
+    // Athuga hvort þetta er uppfærsla eða nýtt tip
+    const existingTipDoc = await getDoc(doc(db, "tips", `${gameId}_${auth.currentUser.uid}`));
+    const isUpdate = existingTipDoc.exists();
 
     await setDoc(doc(db, "tips", `${gameId}_${auth.currentUser.uid}`), {
       gameId,
@@ -1180,7 +1203,7 @@ async function submitTip(gameId) {
       tippedAt: Timestamp.now()
     });
 
-    alert("Tip skráð");
+    alert(isUpdate ? "Tip uppfært! ✓" : "Tip skráð! ✓");
     await loadGames();
   } catch (error) {
     handleError(error, "Villa við að skrá tip");
