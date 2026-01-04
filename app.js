@@ -866,14 +866,54 @@ async function loadGames() {
       return;
     }
     
+    // Raða leikjum eftir gameTime
+    const games = snap.docs.map(doc => ({
+      id: doc.id,
+      data: doc.data()
+    }));
+    
+    games.sort((a, b) => {
+      // Ef annar eða báðir hafa ekki gameTime, setja þá aftast
+      if (!a.data.gameTime && !b.data.gameTime) return 0;
+      if (!a.data.gameTime) return 1;
+      if (!b.data.gameTime) return -1;
+      
+      // Raða eftir gameTime (elstu fyrst)
+      return a.data.gameTime.toMillis() - b.data.gameTime.toMillis();
+    });
+    
     list.innerHTML = "";
+    
+    let hasShownUpcomingHeader = false;
+    let hasShownPastHeader = false;
+    const now = new Date();
 
-    for (let docSnap of snap.docs) {
-      const game = docSnap.data();
-      const gameId = docSnap.id;
+    for (let gameObj of games) {
+      const docSnap = { id: gameObj.id, data: () => gameObj.data };
+      const game = gameObj.data;
+      const gameId = gameObj.id;
+      const game = gameObj.data;
       const canUserTip = canTip(game.gameTime);
       const gameStarted = hasGameStarted(game.gameTime);
       const timeInfo = game.gameTime ? getTimeUntilGame(game.gameTime) : "";
+      
+      // Bæta við header fyrir komandi leiki
+      if (!gameStarted && !hasShownUpcomingHeader && game.gameTime) {
+        const headerLi = document.createElement("li");
+        headerLi.style.cssText = "background: #4CAF50; color: white; font-weight: bold; padding: 10px; margin: 20px 0 10px 0; border-radius: 5px; text-align: center;";
+        headerLi.innerHTML = "⚽ KOMANDI LEIKIR";
+        list.appendChild(headerLi);
+        hasShownUpcomingHeader = true;
+      }
+      
+      // Bæta við header fyrir liðna leiki
+      if (gameStarted && !hasShownPastHeader) {
+        const headerLi = document.createElement("li");
+        headerLi.style.cssText = "background: #9E9E9E; color: white; font-weight: bold; padding: 10px; margin: 20px 0 10px 0; border-radius: 5px; text-align: center;";
+        headerLi.innerHTML = "📋 LIÐNIR LEIKIR";
+        list.appendChild(headerLi);
+        hasShownPastHeader = true;
+      }
       
       const li = document.createElement("li");
       
@@ -937,7 +977,8 @@ async function loadGames() {
 
       const opt = document.createElement("option");
       opt.value = gameId;
-      opt.textContent = `${game.homeTeam} vs ${game.awayTeam}`;
+      const dateStr = game.gameTime ? formatDateTime(game.gameTime).split(' kl.')[0] : 'Engin tími';
+      opt.textContent = `${dateStr} - ${game.homeTeam} vs ${game.awayTeam}`;
       resultSelect.appendChild(opt);
       bonusSelect.appendChild(opt.cloneNode(true));
       deleteSelect.appendChild(opt.cloneNode(true));
