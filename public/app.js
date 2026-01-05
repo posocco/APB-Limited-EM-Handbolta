@@ -107,10 +107,12 @@ function displayGamesFromSheet() {
   const container = document.getElementById('availableGamesList');
   if (!container) return;
   
+  // Ef þetta er fyrsta skiptið, hreinsa listann
   if (displayedGamesCount === 0) {
     container.innerHTML = '';
   }
   
+  // Sækja næstu N leiki
   const gamesToShow = filteredGamesFromSheet.slice(
     displayedGamesCount,
     displayedGamesCount + GAMES_PER_PAGE
@@ -123,6 +125,7 @@ function displayGamesFromSheet() {
   
   for (let i = 0; i < gamesToShow.length; i++) {
     const game = gamesToShow[i];
+    const globalIndex = displayedGamesCount + i;
     
     const div = document.createElement("div");
     div.style.cssText = `
@@ -138,7 +141,18 @@ function displayGamesFromSheet() {
       cursor: pointer;
     `;
     
-    const displayDate = game.gameTime;
+    // Parse dagsetning fyrir betri birtingu
+    let displayDate = game.gameTime;
+    try {
+      const dateTimeParts = game.gameTime.split('/');
+      if (dateTimeParts.length >= 3) {
+        const datePart = `${dateTimeParts[2]}.${dateTimeParts[1]}.${dateTimeParts[0].substring(2)}`;
+        const timePart = dateTimeParts[3] || '';
+        displayDate = `${datePart} kl. ${timePart}`;
+      }
+    } catch (e) {
+      // Nota upprunalega dagsetninguna ef parsing mistekst
+    }
     
     div.innerHTML = `
       <div style="flex: 1;">
@@ -152,6 +166,7 @@ function displayGamesFromSheet() {
       </button>
     `;
     
+    // Hover effects
     div.onmouseover = () => {
       div.style.borderColor = 'var(--primary)';
       div.style.transform = 'translateX(5px)';
@@ -169,6 +184,7 @@ function displayGamesFromSheet() {
   
   displayedGamesCount += gamesToShow.length;
   
+  // Sýna "hlaða meira" skilaboð ef það eru fleiri leikir
   if (displayedGamesCount < filteredGamesFromSheet.length) {
     const loadMoreDiv = document.createElement('div');
     loadMoreDiv.id = 'loadMoreIndicator';
@@ -189,11 +205,19 @@ function displayGamesFromSheet() {
       displayGamesFromSheet();
     };
     
+    loadMoreDiv.onmouseover = () => {
+      loadMoreDiv.style.color = 'var(--secondary)';
+    };
+    
+    loadMoreDiv.onmouseout = () => {
+      loadMoreDiv.style.color = 'var(--primary)';
+    };
+    
     container.appendChild(loadMoreDiv);
   }
 }
 
-// Infinite scroll
+// Infinite scroll fyrir leikjalista
 function setupInfiniteScrollForGames() {
   const container = document.getElementById('availableGamesContainer');
   if (!container) return;
@@ -202,8 +226,10 @@ function setupInfiniteScrollForGames() {
     const scrollPosition = container.scrollTop + container.clientHeight;
     const scrollHeight = container.scrollHeight;
     
+    // Ef notandi er kominn næstum neðst
     if (scrollPosition >= scrollHeight - 50) {
       if (displayedGamesCount < filteredGamesFromSheet.length) {
+        // Fjarlægja "load more" indicator ef til staðar
         const loadMoreIndicator = document.getElementById('loadMoreIndicator');
         if (loadMoreIndicator) {
           loadMoreIndicator.remove();
@@ -214,7 +240,7 @@ function setupInfiniteScrollForGames() {
   });
 }
 
-// Sýna leiki frá Google Sheets
+// Sýna leiki frá Google Sheets - UPPFÆRT
 async function showAvailableGames() {
   const container = document.getElementById('availableGamesList');
   const outerContainer = document.getElementById('availableGamesContainer');
@@ -232,10 +258,14 @@ async function showAvailableGames() {
       return;
     }
     
+    // Núllstilla teljarar
     displayedGamesCount = 0;
     filteredGamesFromSheet = [...games];
     
+    // Sýna fyrstu leikina
     displayGamesFromSheet();
+    
+    // Setja upp scroll event listener
     setupInfiniteScrollForGames();
     
   } catch (error) {
@@ -244,9 +274,69 @@ async function showAvailableGames() {
   }
 }
 
-// Bæta leik við deild úr Google Sheet - LAGAÐ
+// Bæta leik við deild úr Google Sheet - SAMA OG ÁÐUR
 window.addGameFromSheet = async (index) => {
-  const game = availableGamesFromSheet[index
+  const game = availableGamesFromSheet[index];
+  if (!game) return alert("Leikur fannst ekki!");
+  
+  showLoading(true);
+  try {
+    const dateTimeParts = game.gameTime.split('/');
+    const dateParts = dateTimeParts[0].split('-');
+    const timeParts = dateTimeParts[1].split(':');
+    
+    const gameDate = new Date(
+      parseInt(dateParts[0]),
+      parseInt(dateParts[1]) - 1,
+      parseInt(dateParts[2]),
+      parseInt(timeParts[0]),
+      parseInt(timeParts[1])
+    );
+    
+    const gameTime = Timestamp.fromDate(gameDate);
+
+    await addDoc(collection(db, "games"), {
+      leagueId: activeLeagueId,
+      homeTeam: game.homeTeam,
+      awayTeam: game.awayTeam,
+      gameTime: gameTime,
+      competition: game.competition,
+      result: null,
+      createdAt: Timestamp.now()
+    });
+
+    clearCache();
+    await loadAllLeagueData();
+    alert(`✅ Leikur bætt við: ${game.homeTeam} vs ${game.awayTeam}`);
+  } catch (error) {
+    handleError(error, "Villa við að bæta leik við");
+  } finally {
+    showLoading(false);
+  }
+};
+
+// Event listener fyrir leitarreit
+document.addEventListener('DOMContentLoaded', () => {
+  const searchInput = document.getElementById('gameSearchInput');
+  if (searchInput) {
+    searchInput.addEventListener('input', (e) => {
+      searchGamesFromSheet(e.target.value);
+    });
+  }
+});
+
+// Refresh leiki úr Google Sheets - UPPFÆRT
+document.getElementById("refreshGamesBtn")?.addEventListener("click", async () => {
+  showLoading(true);
+  try {
+    await showAvailableGames();
+    alert("✅ Leikir uppfærðir!");
+  } catch (error) {
+    handleError(error, "Villa við að uppfæra leiki");
+  } finally {
+    showLoading(false);
+  }
+});
 /* =========================
    CACHE FYRIR GÖGN
 ========================= */
