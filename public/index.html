@@ -620,6 +620,60 @@
     ::-webkit-scrollbar-thumb:hover {
       background: var(--secondary);
     }
+
+    /* Betri input fields fyrir tipp */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  opacity: 1;
+  height: 40px;
+}
+
+/* Firefox */
+input[type="number"] {
+  -moz-appearance: textfield;
+}
+
+input[type="number"]:hover::-webkit-inner-spin-button,
+input[type="number"]:hover::-webkit-outer-spin-button {
+  opacity: 1;
+}
+
+/* Mobile optimization fyrir tipp inputs */
+@media (max-width: 768px) {
+  input[type="number"] {
+    font-size: 1.2rem !important;
+    padding: 12px !important;
+    width: 70px !important;
+  }
+}
+```
+
+---
+
+## ✨ **Breytingar:**
+
+✅ **Stærri input reitir:** 60px → 80px  
+✅ **Stærri font:** 1.1rem og bold  
+✅ **Labels fyrir lið:** Sýnir nafn liðs  
+✅ **Miðjusett texti:** Betra útlit  
+✅ **Meiri padding:** 10px í stað default  
+✅ **Betri spacing:** Flexbox með gap  
+✅ **Min/max gildi:** 0-99 (engir neikvæðir)  
+✅ **Stærri "-" merki:** 1.5rem  
+✅ **Betri "of seint" skilaboð:** Með emoji og betri stíl  
+
+---
+
+## 🎨 **Hvernig það lítur út:**
+
+**Fyrir:**
+```
+[30] - [28] [Tippa]
+```
+
+**Eftir:**
+```
+Ísland:  [  30  ]  -  Þýskaland:  [  28  ]  [Tippa]
   </style>
 </head>
 <body>
