@@ -1675,20 +1675,43 @@ async function renderGames(data) {
       }
       
       html += `
-        <div style="margin-top: 10px;">
-          ${existingTip ? `<div style="background: #e8f5e9; padding: 8px; border-radius: 5px; margin-bottom: 8px;">
-            <strong style="color: #2e7d32;">✓ Þitt tip: ${existingTip.prediction}</strong>
-            ${canUserTip ? '<br><small>Þú getur breytt þessu hvenær sem er</small>' : ''}
-          </div>` : ''}
-          <input id="tipHome_${game.id}" type="number" placeholder="${game.homeTeam}" 
-            value="${homeValue}" style="width: 60px;" ${!canUserTip ? 'disabled' : ''}>
-          <span style="margin: 0 5px;">-</span>
-          <input id="tipAway_${game.id}" type="number" placeholder="${game.awayTeam}" 
-            value="${awayValue}" style="width: 60px;" ${!canUserTip ? 'disabled' : ''}>
-          <button id="tipBtn_${game.id}" ${!canUserTip ? 'disabled' : ''}>${buttonText}</button>
-          ${!canUserTip ? '<br><span style="color: red;">Of seint að tippa</span>' : ''}
+      <div style="margin-top: 10px;">
+        ${existingTip ? `<div style="background: #e8f5e9; padding: 8px; border-radius: 5px; margin-bottom: 8px;">
+          <strong style="color: #2e7d32;">✓ Þitt tip: ${existingTip.prediction}</strong>
+          ${canUserTip ? '<br><small>Þú getur breytt þessu hvenær sem er</small>' : ''}
+        </div>` : ''}
+        
+        <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <label style="font-weight: 600; color: #667eea; font-size: 0.9rem;">${game.homeTeam}:</label>
+            <input id="tipHome_${game.id}" type="number" 
+              value="${homeValue}" 
+              min="0" 
+              max="99"
+              style="width: 80px; font-size: 1.1rem; font-weight: 600; text-align: center; padding: 10px;" 
+              ${!canUserTip ? 'disabled' : ''}>
+          </div>
+          
+          <span style="font-size: 1.5rem; font-weight: bold; color: #667eea;">-</span>
+          
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <label style="font-weight: 600; color: #667eea; font-size: 0.9rem;">${game.awayTeam}:</label>
+            <input id="tipAway_${game.id}" type="number" 
+              value="${awayValue}" 
+              min="0" 
+              max="99"
+              style="width: 80px; font-size: 1.1rem; font-weight: 600; text-align: center; padding: 10px;" 
+              ${!canUserTip ? 'disabled' : ''}>
+          </div>
+          
+          <button id="tipBtn_${game.id}" 
+            style="padding: 10px 20px; margin: 0;"
+            ${!canUserTip ? 'disabled' : ''}>${buttonText}</button>
         </div>
-      `;
+        
+        ${!canUserTip ? '<div style="margin-top: 8px;"><span style="color: #ef4444; font-weight: 600;">⏰ Of seint að tippa</span></div>' : ''}
+      </div>
+    `;
       
       html += renderBonusQuestionsForGame(game.id, canUserTip, bonusQuestionsMap, bonusAnswersMap);
     }
