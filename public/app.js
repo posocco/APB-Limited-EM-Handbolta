@@ -387,7 +387,245 @@ document.getElementById("refreshGamesBtn")?.addEventListener("click", async () =
   }
 });
 
+/* =========================
+   CHAT SYSTEM
+========================= */
+let chatListener = null;
+const MESSAGE_LIMIT = 50;
 
+// Import onSnapshot fyrir real-time
+import { onSnapshot } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
+
+// Send message
+async function sendChatMessage() {
+  const input = document.getElementById('chatInput');
+  const message = input.value.trim();
+  
+  if (!message) return;
+  if (!activeLeagueId || !auth.currentUser) return alert("Þú verður að vera í deild!");
+  
+  const username = document.getElementById("username")?.value || "Óþekktur";
+  
+  // Rate limiting - max 10 messages per minute
+  const oneMinuteAgo = Timestamp.fromMillis(Date.now() - 60000);
+  const userMessages = await getDocs(query(
+    collection(db, "messages"),
+    where("userId", "==", auth.currentUser.uid),
+    where("leagueId", "==", activeLeagueId),
+    where("timestamp", ">", oneMinuteAgo)
+  ));
+  
+  if (userMessages.size >= 10) {
+    return alert("Of mörg skilaboð! Bíddu aðeins.");
+  }
+  
+  try {
+    // Optimistic UI - sýna skilaboðið strax
+    const tempMsg = {
+      username: username,
+      message: message,
+      timestamp: Timestamp.now(),
+      userId: auth.currentUser.uid,
+      optimistic: true
+    };
+    
+    appendMessage(tempMsg);
+    input.value = "";
+    updateCharCount();
+    
+    // Send to Firestore
+    await addDoc(collection(db, "messages"), {
+      leagueId: activeLeagueId,
+      userId: auth.currentUser.uid,
+      username: username,
+      message: message,
+      timestamp: Timestamp.now()
+    });
+    
+  } catch (error) {
+    handleError(error, "Villa við að senda skilaboð");
+  }
+}
+
+// Load and listen to messages
+function loadChatMessages() {
+  if (!activeLeagueId) {
+    document.getElementById('chatCard').style.display = 'none';
+    return;
+  }
+  
+  // Unsubscribe eldri listener
+  if (chatListener) {
+    chatListener();
+  }
+  
+  const container = document.getElementById('chatMessages');
+  if (!container) return;
+  
+  container.innerHTML = '<p style="text-align: center; color: #666;">Hleð skilaboðum...</p>';
+  
+  // Query fyrir nýjustu skilaboðin
+  const q = query(
+    collection(db, "messages"),
+    where("leagueId", "==", activeLeagueId),
+    orderBy("timestamp", "desc"),
+    limit(MESSAGE_LIMIT)
+  );
+  
+  // Real-time listener
+  chatListener = onSnapshot(q, (snapshot) => {
+    container.innerHTML = "";
+    
+    if (snapshot.empty) {
+      container.innerHTML = '<p style="text-align: center; color: #666;">Engin skilaboð ennþá. Vertu fyrstur til að skrifa! 👋</p>';
+      document.getElementById('messageCount').textContent = "0";
+      return;
+    }
+    
+    const messages = [];
+    snapshot.forEach(doc => {
+      messages.push({ id: doc.id, ...doc.data() });
+    });
+    
+    // Reverse til að fá elstu efst
+    messages.reverse();
+    
+    messages.forEach(msg => {
+      if (!msg.optimistic) { // Skip optimistic messages (already shown)
+        appendMessage(msg);
+      }
+    });
+    
+    document.getElementById('messageCount').textContent = messages.length;
+    
+    // Scroll niður að nýjasta skilaboði
+    setTimeout(() => {
+      container.scrollTop = container.scrollHeight;
+    }, 100);
+    
+  }, (error) => {
+    console.error("Villa við að hlaða skilaboðum:", error);
+    container.innerHTML = '<p style="text-align: center; color: #dc3545;">Villa við að hlaða skilaboð</p>';
+  });
+}
+
+// Append single message to UI
+function appendMessage(msg) {
+  const container = document.getElementById('chatMessages');
+  if (!container) return;
+  
+  const isOwnMessage = msg.userId === auth.currentUser.uid;
+  
+  const div = document.createElement('div');
+  div.style.cssText = `
+    padding: 10px 14px;
+    margin: 8px 0;
+    border-radius: 16px;
+    background: ${isOwnMessage ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' : 'white'};
+    color: ${isOwnMessage ? 'white' : '#1f2937'};
+    box-shadow: var(--shadow-sm);
+    max-width: 75%;
+    ${isOwnMessage ? 'margin-left: auto;' : 'margin-right: auto;'}
+    word-wrap: break-word;
+    opacity: ${msg.optimistic ? '0.6' : '1'};
+    transition: opacity 0.3s ease;
+    animation: fadeIn 0.3s ease;
+  `;
+  
+  const time = msg.timestamp ? formatChatTime(msg.timestamp.toDate()) : 'Núna';
+  
+  div.innerHTML = `
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+      <strong style="font-size: 0.9rem;">${escapeHtml(msg.username)}</strong>
+      <small style="opacity: 0.7; font-size: 0.75rem;">${time}</small>
+    </div>
+    <div style="font-size: 0.95rem; line-height: 1.4;">${escapeHtml(msg.message)}</div>
+  `;
+  
+  container.appendChild(div);
+}
+
+// Format time for chat
+function formatChatTime(date) {
+  const now = new Date();
+  const diffMs = now - date;
+  const diffMins = Math.floor(diffMs / 60000);
+  
+  if (diffMins < 1) return 'Núna';
+  if (diffMins < 60) return `${diffMins} mín`;
+  
+  const diffHours = Math.floor(diffMins / 60);
+  if (diffHours < 24) return `${diffHours} klst`;
+  
+  const day = String(date.getDate()).padStart(2, '0');
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const hours = String(date.getHours()).padStart(2, '0');
+  const mins = String(date.getMinutes()).padStart(2, '0');
+  
+  return `${day}.${month} ${hours}:${mins}`;
+}
+
+// Escape HTML to prevent XSS
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+// Update character count
+function updateCharCount() {
+  const input = document.getElementById('chatInput');
+  const counter = document.getElementById('chatCharCount');
+  if (input && counter) {
+    counter.textContent = input.value.length;
+    
+    // Change color when approaching limit
+    if (input.value.length > 450) {
+      counter.style.color = '#ef4444';
+      counter.style.fontWeight = 'bold';
+    } else if (input.value.length > 400) {
+      counter.style.color = '#f59e0b';
+      counter.style.fontWeight = '600';
+    } else {
+      counter.style.color = '#666';
+      counter.style.fontWeight = 'normal';
+    }
+  }
+}
+
+// Event listeners
+document.getElementById('sendMessageBtn')?.addEventListener('click', sendChatMessage);
+
+document.getElementById('chatInput')?.addEventListener('keypress', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    sendChatMessage();
+  }
+});
+
+document.getElementById('chatInput')?.addEventListener('input', updateCharCount);
+
+// Cleanup when switching leagues or logging out
+function cleanupChat() {
+  if (chatListener) {
+    chatListener();
+    chatListener = null;
+  }
+  
+  const container = document.getElementById('chatMessages');
+  if (container) {
+    container.innerHTML = '<p style="text-align: center; color: #666;">Engin skilaboð ennþá...</p>';
+  }
+  
+  document.getElementById('chatCard').style.display = 'none';
+}
+
+// Cleanup on page unload
+window.addEventListener('beforeunload', () => {
+  if (chatListener) {
+    chatListener();
+  }
+});
 /* =========================
    CACHE FYRIR GÖGN
 ========================= */
