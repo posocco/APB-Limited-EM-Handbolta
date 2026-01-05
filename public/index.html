@@ -735,7 +735,17 @@
     <!-- ADMIN PANEL -->
     <div id="adminPanel" class="admin-panel" style="display: none;">
       <h2>🔧 Stjórnandi</h2>
-      
+      <!-- Í adminPanel, fyrir ofan "Búa til leik" -->
+<div style="margin-bottom: 20px;">
+  <h3>📋 Leikir úr Google Sheets</h3>
+  <p style="color: #666; margin-bottom: 10px; font-weight: 500;">Sækja leiki beint úr Google Sheet</p>
+  <button id="refreshGamesBtn" style="background: var(--success);">🔄 Sækja leiki</button>
+  <div id="availableGamesList" style="margin-top: 15px;"></div>
+</div>
+
+<div style="border-top: 2px solid var(--border); padding-top: 20px; margin: 20px 0;"></div>
+
+<!-- Núverandi "Búa til leik" hér fyrir neðan -->
       <div style="margin-bottom: 24px;">
         <h3>Búa til leik</h3>
         <div class="grid-2">
