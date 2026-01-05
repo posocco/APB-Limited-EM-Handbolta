@@ -626,6 +626,7 @@ window.addEventListener('beforeunload', () => {
     chatListener();
   }
 });
+
 /* =========================
    CACHE FYRIR GÖGN
 ========================= */
