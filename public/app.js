@@ -386,6 +386,8 @@ document.getElementById("refreshGamesBtn")?.addEventListener("click", async () =
     showLoading(false);
   }
 });
+
+
 /* =========================
    CACHE FYRIR GÖGN
 ========================= */
