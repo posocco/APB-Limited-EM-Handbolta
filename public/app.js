@@ -30,7 +30,157 @@ import {
 let activeLeagueId = null;
 let currentLeagueSettings = null;
 let currentGameForBonus = null;
+// GOOGLE SHEETS INTEGRATION
+const SHEET_ID = '15LQbx0CbACqEgtPpb5IC_EK3aJRavGoKgv7BFo7t9bA';
+const SHEET_NAME = 'Sheet1'; // Breyttu þessu ef sheetið þitt heitir eitthvað annað
+const SHEET_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&sheet=${SHEET_NAME}`;
 
+let availableGamesFromSheet = [];
+
+// Sækja leiki úr Google Sheets
+async function fetchGamesFromSheet() {
+  try {
+    const response = await fetch(SHEET_URL);
+    const text = await response.text();
+    
+    // Google returnerar JSONP, þurfum að parse-a það
+    const jsonString = text.substring(47).slice(0, -2);
+    const json = JSON.parse(jsonString);
+    
+    const rows = json.table.rows;
+    const games = [];
+    
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i].c;
+      
+      // Skip ef röð er tóm
+      if (!row[0] || !row[1] || !row[2]) continue;
+      
+      const homeTeam = row[0]?.v || '';
+      const awayTeam = row[1]?.v || '';
+      const gameTimeStr = row[2]?.v || '';
+      const competition = row[3]?.v || 'EM Handbolta';
+      
+      if (homeTeam && awayTeam && gameTimeStr) {
+        games.push({
+          homeTeam,
+          awayTeam,
+          gameTime: gameTimeStr,
+          competition
+        });
+      }
+    }
+    
+    availableGamesFromSheet = games;
+    return games;
+  } catch (error) {
+    console.error("Villa við að sækja leiki úr Google Sheets:", error);
+    return [];
+  }
+}
+
+// Sýna leiki frá Google Sheets
+async function showAvailableGames() {
+  const container = document.getElementById('availableGamesList');
+  if (!container) return;
+  
+  container.innerHTML = "<p>Hleð leikjum úr Google Sheets...</p>";
+  
+  try {
+    const games = await fetchGamesFromSheet();
+    
+    if (games.length === 0) {
+      container.innerHTML = "<p>Engir leikir fundust í Google Sheet</p>";
+      return;
+    }
+    
+    container.innerHTML = "<p style='margin-bottom: 15px; color: #666; font-weight: 500;'>Veldu leiki til að bæta við deildina:</p>";
+    
+    for (let i = 0; i < games.length; i++) {
+      const game = games[i];
+      const div = document.createElement("div");
+      div.style.cssText = "background: white; padding: 15px; margin: 10px 0; border-radius: 12px; display: flex; justify-content: space-between; align-items: center; border: 2px solid var(--border); transition: all 0.2s;";
+      
+      div.innerHTML = `
+        <div>
+          <strong style="font-size: 1.05rem;">${game.homeTeam} vs ${game.awayTeam}</strong><br>
+          <small style="color: #666;">${game.gameTime}</small>
+          <small style="color: #667eea; margin-left: 10px;">📋 ${game.competition}</small>
+        </div>
+        <button onclick="addGameFromSheet(${i})" style="padding: 10px 20px; margin: 0;">➕ Bæta við</button>
+      `;
+      
+      div.onmouseover = () => {
+        div.style.borderColor = 'var(--primary)';
+        div.style.transform = 'translateX(5px)';
+      };
+      div.onmouseout = () => {
+        div.style.borderColor = 'var(--border)';
+        div.style.transform = 'translateX(0)';
+      };
+      
+      container.appendChild(div);
+    }
+  } catch (error) {
+    handleError(error, "Villa við að sýna leiki");
+    container.innerHTML = "<p>Villa við að hlaða leikjum</p>";
+  }
+}
+
+// Bæta leik við deild úr Google Sheet
+window.addGameFromSheet = async (index) => {
+  const game = availableGamesFromSheet[index];
+  if (!game) return alert("Leikur fannst ekki!");
+  
+  showLoading(true);
+  try {
+    // Parse datetime string
+    const dateTimeParts = game.gameTime.split(' ');
+    const dateParts = dateTimeParts[0].split('-');
+    const timeParts = dateTimeParts[1].split(':');
+    
+    const gameDate = new Date(
+      parseInt(dateParts[0]), // year
+      parseInt(dateParts[1]) - 1, // month (0-indexed)
+      parseInt(dateParts[2]), // day
+      parseInt(timeParts[0]), // hours
+      parseInt(timeParts[1]) // minutes
+    );
+    
+    const gameTime = Timestamp.fromDate(gameDate);
+
+    await addDoc(collection(db, "games"), {
+      leagueId: activeLeagueId,
+      homeTeam: game.homeTeam,
+      awayTeam: game.awayTeam,
+      gameTime: gameTime,
+      competition: game.competition,
+      result: null,
+      createdAt: Timestamp.now()
+    });
+
+    clearCache();
+    await loadAllLeagueData();
+    alert(`✅ Leikur bætt við: ${game.homeTeam} vs ${game.awayTeam}`);
+  } catch (error) {
+    handleError(error, "Villa við að bæta leik við");
+  } finally {
+    showLoading(false);
+  }
+};
+
+// Refresh leiki úr Google Sheets
+document.getElementById("refreshGamesBtn")?.addEventListener("click", async () => {
+  showLoading(true);
+  try {
+    await showAvailableGames();
+    alert("✅ Leikir uppfærðir!");
+  } catch (error) {
+    handleError(error, "Villa við að uppfæra leiki");
+  } finally {
+    showLoading(false);
+  }
+});
 /* =========================
    CACHE FYRIR GÖGN
 ========================= */
