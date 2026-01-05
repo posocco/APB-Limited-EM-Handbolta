@@ -40,7 +40,7 @@ let filteredGamesFromSheet = [];
 let displayedGamesCount = 0;
 const GAMES_PER_PAGE = 5;
 
-// Sækja leiki úr Google Sheets
+// Sækja leiki úr Google Sheets - LAGAÐ FYRIR DATE OBJECTS
 async function fetchGamesFromSheet() {
   try {
     const response = await fetch(SHEET_URL);
@@ -59,14 +59,38 @@ async function fetchGamesFromSheet() {
       
       const homeTeam = row[0]?.v || '';
       const awayTeam = row[1]?.v || '';
-      const gameTimeStr = row[2]?.v || '';
+      const gameTimeRaw = row[2]?.v || '';
       const competition = row[3]?.v || 'EM Handbolta';
+      
+      // Parse dagsetninguna - Google Sheets skilar Date(YYYY,M,D,H,M,S) format
+      let gameTimeStr = gameTimeRaw;
+      
+      // Athuga hvort þetta er Date() format frá Google
+      if (typeof gameTimeRaw === 'string' && gameTimeRaw.startsWith('Date(')) {
+        try {
+          // Extract tölurnar úr Date(2026,0,16,17,0,0)
+          const match = gameTimeRaw.match(/Date\((\d+),(\d+),(\d+),(\d+),(\d+),(\d+)\)/);
+          if (match) {
+            const year = match[1];
+            const month = String(parseInt(match[2]) + 1).padStart(2, '0'); // Google notar 0-indexed mánuði
+            const day = String(match[3]).padStart(2, '0');
+            const hour = String(match[4]).padStart(2, '0');
+            const minute = String(match[5]).padStart(2, '0');
+            
+            // Búa til lesanlegt format
+            gameTimeStr = `${year}-${month}-${day} ${hour}:${minute}`;
+          }
+        } catch (e) {
+          console.error('Gat ekki parsed Date format:', gameTimeRaw);
+        }
+      }
       
       if (homeTeam && awayTeam && gameTimeStr) {
         games.push({
           homeTeam,
           awayTeam,
           gameTime: gameTimeStr,
+          gameTimeRaw: gameTimeRaw, // Vista upprunalega fyrir debug
           competition
         });
       }
