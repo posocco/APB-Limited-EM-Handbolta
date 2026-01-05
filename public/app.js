@@ -1090,6 +1090,7 @@ async function loadUserLeagues() {
       }
 
       li.onclick = async () => {
+        cleanupChat(); // BÆTA VIÐ ÞESSARI LÍNU
         activeLeagueId = leagueId;
         saveActiveLeague(leagueId);
         
