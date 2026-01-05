@@ -1139,6 +1139,10 @@ async function loadAllLeagueData() {
     checkAdminWithData(data),
     checkUpcomingGames()
   ]);
+  
+  // BÆTA VIÐ ÞESSUM LÍNUM:
+  document.getElementById('chatCard').style.display = 'block';
+  loadChatMessages();
 }
 
 /* =========================
