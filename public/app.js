@@ -931,17 +931,18 @@ getRedirectResult(auth)
     }
   });
 
-document.getElementById("logoutBtn")?.addEventListener("click", async () => {
-  try {
-    await auth.signOut();
-    saveActiveLeague(null);
-    activeLeagueId = null;
-    clearCache();
-    location.reload();
-  } catch (error) {
-    handleError(error, "Villa við útskráningu");
-  }
-});
+  document.getElementById("logoutBtn")?.addEventListener("click", async () => {
+    try {
+      cleanupChat(); // BÆTA VIÐ
+      await auth.signOut();
+      saveActiveLeague(null);
+      activeLeagueId = null;
+      clearCache();
+      location.reload();
+    } catch (error) {
+      handleError(error, "Villa við útskráningu");
+    }
+  });
 
 /* =========================
    DEILDIR
