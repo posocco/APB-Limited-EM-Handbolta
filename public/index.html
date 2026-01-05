@@ -737,15 +737,35 @@
       <h2>🔧 Stjórnandi</h2>
 
       <!-- Í adminPanel, fyrir ofan "Búa til leik" -->
-<div style="margin-bottom: 20px;">
-  <h3>📋 Leikir úr Google Sheets</h3>
-  <p style="color: #666; margin-bottom: 10px; font-weight: 500;">Sækja leiki beint úr Google Sheet</p>
-  <button id="refreshGamesBtn" style="background: var(--success);">🔄 Sækja leiki</button>
-  <div id="availableGamesList" style="margin-top: 15px;"></div>
-</div>
-
-<div style="border-top: 2px solid var(--border); padding-top: 20px; margin: 20px 0;"></div>
-
+      <div style="margin-bottom: 20px;">
+        <h3>📋 Leikir úr Google Sheets</h3>
+        <p style="color: #666; margin-bottom: 10px; font-weight: 500;">Sækja leiki beint úr Google Sheet</p>
+        
+        <!-- Leitarreitur -->
+        <input 
+          type="text" 
+          id="gameSearchInput" 
+          placeholder="🔍 Leita að liði eða dagsetningu..." 
+          style="margin-bottom: 10px; width: 100%; max-width: 100%;">
+        
+        <button id="refreshGamesBtn" style="background: var(--success);">🔄 Sækja leiki</button>
+        
+        <!-- Leikjalisti með skrun -->
+        <div id="availableGamesContainer" style="
+          margin-top: 15px; 
+          max-height: 400px; 
+          overflow-y: auto; 
+          border: 2px solid var(--border); 
+          border-radius: 12px; 
+          padding: 12px;
+          background: white;
+          display: none;">
+          <div id="availableGamesList"></div>
+          <div id="gamesLoadingMore" style="text-align: center; padding: 10px; color: #666; display: none;">
+            Hleður fleiri leiki...
+          </div>
+        </div>
+      </div>
 <!-- Núverandi "Búa til leik" hér fyrir neðan -->
       <div style="margin-bottom: 24px;">
         <h3>Búa til leik</h3>
