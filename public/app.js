@@ -721,6 +721,10 @@ async function checkAdminWithData(data) {
     panel.style.display = isAdmin ? "block" : "none";
     settingsPanel.style.display = isAdmin ? "block" : "none";
     
+    // BÆTA VIÐ ÞESSARI LÍNU:
+    if (isAdmin) {
+      await showAvailableGames();
+    }
     if (isAdmin && currentLeagueSettings) {
       document.getElementById("pointExactScore").value = currentLeagueSettings.exactScore;
       document.getElementById("pointHomeScore").value = currentLeagueSettings.homeTeamScore;
