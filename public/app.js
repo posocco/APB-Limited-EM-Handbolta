@@ -268,52 +268,75 @@ async function showAvailableGames() {
   }
 }
 
-// Bæta leik við deild úr Google Sheet - LAGAÐ
+// Bæta leik við deild úr Google Sheet - LAGAÐ FYRIR DATE OBJECTS
 window.addGameFromSheet = async (index) => {
   const game = availableGamesFromSheet[index];
   if (!game) return alert("Leikur fannst ekki!");
   
   showLoading(true);
   try {
-    const gameTimeStr = game.gameTime.trim();
     let gameDate;
+    const gameTimeStr = game.gameTime.trim();
     
-    if (gameTimeStr.includes('/')) {
-      const parts = gameTimeStr.split(' ');
-      const datePart = parts[0];
-      const timePart = parts[1] || '00:00';
-      
-      const dateParts = datePart.split('/');
-      const timeParts = timePart.split(':');
-      
-      gameDate = new Date(
-        parseInt(dateParts[0]),
-        parseInt(dateParts[1]) - 1,
-        parseInt(dateParts[2]),
-        parseInt(timeParts[0]),
-        parseInt(timeParts[1])
-      );
-    } else if (gameTimeStr.includes('-')) {
-      const parts = gameTimeStr.split(' ');
-      const datePart = parts[0];
-      const timePart = parts[1] || '00:00';
-      
-      const dateParts = datePart.split('-');
-      const timeParts = timePart.split(':');
-      
-      gameDate = new Date(
-        parseInt(dateParts[0]),
-        parseInt(dateParts[1]) - 1,
-        parseInt(dateParts[2]),
-        parseInt(timeParts[0]),
-        parseInt(timeParts[1])
-      );
-    } else {
-      gameDate = new Date(gameTimeStr);
+    console.log('Reyni að parse:', gameTimeStr);
+    
+    // Ef þetta er Date() format frá Google
+    if (game.gameTimeRaw && game.gameTimeRaw.startsWith('Date(')) {
+      const match = game.gameTimeRaw.match(/Date\((\d+),(\d+),(\d+),(\d+),(\d+),(\d+)\)/);
+      if (match) {
+        gameDate = new Date(
+          parseInt(match[1]), // year
+          parseInt(match[2]), // month (Google notar 0-indexed)
+          parseInt(match[3]), // day
+          parseInt(match[4]), // hour
+          parseInt(match[5]), // minute
+          parseInt(match[6])  // second
+        );
+      }
     }
+    
+    // Fallback: Reyna að parse streng
+    if (!gameDate || isNaN(gameDate.getTime())) {
+      if (gameTimeStr.includes('/')) {
+        const parts = gameTimeStr.split(' ');
+        const datePart = parts[0];
+        const timePart = parts[1] || '00:00';
+        
+        const dateParts = datePart.split('/');
+        const timeParts = timePart.split(':');
+        
+        gameDate = new Date(
+          parseInt(dateParts[0]),
+          parseInt(dateParts[1]) - 1,
+          parseInt(dateParts[2]),
+          parseInt(timeParts[0]),
+          parseInt(timeParts[1])
+        );
+      } else if (gameTimeStr.includes('-')) {
+        const parts = gameTimeStr.split(' ');
+        const datePart = parts[0];
+        const timePart = parts[1] || '00:00';
+        
+        const dateParts = datePart.split('-');
+        const timeParts = timePart.split(':');
+        
+        gameDate = new Date(
+          parseInt(dateParts[0]),
+          parseInt(dateParts[1]) - 1,
+          parseInt(dateParts[2]),
+          parseInt(timeParts[0]),
+          parseInt(timeParts[1])
+        );
+      } else {
+        gameDate = new Date(gameTimeStr);
+      }
+    }
+    
+    console.log('Parsed date:', gameDate);
     
     if (isNaN(gameDate.getTime())) {
       alert(`Villa: Gat ekki lesið dagsetningu: "${gameTimeStr}"`);
+      console.error('Raw:', game.gameTimeRaw);
       showLoading(false);
       return;
     }
@@ -335,13 +358,12 @@ window.addGameFromSheet = async (index) => {
     alert(`✅ Leikur bætt við: ${game.homeTeam} vs ${game.awayTeam}`);
   } catch (error) {
     console.error("Full error:", error);
-    console.error("Game time string:", game.gameTime);
+    console.error("Game data:", game);
     handleError(error, "Villa við að bæta leik við");
   } finally {
     showLoading(false);
   }
 };
-
 // Event listener fyrir leitarreit
 document.addEventListener('DOMContentLoaded', () => {
   const searchInput = document.getElementById('gameSearchInput');
