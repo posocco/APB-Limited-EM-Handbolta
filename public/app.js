@@ -2208,6 +2208,21 @@ document.getElementById("bonusQuestionType")?.addEventListener("change", (e) => 
   }
 });
 
+// MANUAL RECALCULATE TAKKI
+document.getElementById("manualRecalculateBtn")?.addEventListener("click", async () => {
+  if (!confirm("Ertu viss? Þetta endurreiknar öll stig í deildinni.")) return;
+  
+  showLoading(true);
+  try {
+    await recalculateAllPoints();
+    alert("✅ Öll stig endurreiknuð!");
+  } catch (error) {
+    handleError(error, "Villa við að endurreikna stig");
+  } finally {
+    showLoading(false);
+  }
+});
+
 async function renderScores(data) {
   const ul = document.getElementById("leagueScores");
   
