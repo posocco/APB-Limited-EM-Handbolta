@@ -449,7 +449,7 @@ function loadChatMessages() {
   const q = query(
     collection(db, "messages"),
     where("leagueId", "==", activeLeagueId),
-    orderBy("timestamp", "desc"),
+    orderBy("timestamp", "asc"),  // ✅ LAGAÐ - asc í staðinn fyrir desc
     limit(MESSAGE_LIMIT)
   );
   
