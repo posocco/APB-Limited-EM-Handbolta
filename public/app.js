@@ -1,4 +1,4 @@
-// OPTIMIZED ÚTGÁFA MEÐ CACHE OG BETRI PERFORMANCE
+// LAGAÐUR KÓÐI - OPTIMIZED ÚTGÁFA MEÐ CACHE OG BETRI PERFORMANCE
 
 import { auth, db } from "./firebase.js";
 import {
@@ -215,24 +215,38 @@ function displayGamesFromSheet() {
   }
 }
 
+// LAGAÐ: Betri scroll detection með debounce
 function setupInfiniteScrollForGames() {
   const container = document.getElementById('availableGamesContainer');
   if (!container) return;
   
-  container.addEventListener('scroll', () => {
-    const scrollPosition = container.scrollTop + container.clientHeight;
-    const scrollHeight = container.scrollHeight;
-    
-    if (scrollPosition >= scrollHeight - 50) {
-      if (displayedGamesCount < filteredGamesFromSheet.length) {
-        const loadMoreIndicator = document.getElementById('loadMoreIndicator');
-        if (loadMoreIndicator) {
-          loadMoreIndicator.remove();
+  // Remove any existing listener
+  if (container.scrollHandler) {
+    container.removeEventListener('scroll', container.scrollHandler);
+  }
+  
+  // Create debounced scroll handler
+  let scrollTimeout;
+  container.scrollHandler = () => {
+    clearTimeout(scrollTimeout);
+    scrollTimeout = setTimeout(() => {
+      const scrollPosition = container.scrollTop + container.clientHeight;
+      const scrollHeight = container.scrollHeight;
+      
+      // Trigger when within 100px of bottom
+      if (scrollPosition >= scrollHeight - 100) {
+        if (displayedGamesCount < filteredGamesFromSheet.length) {
+          const loadMoreIndicator = document.getElementById('loadMoreIndicator');
+          if (loadMoreIndicator) {
+            loadMoreIndicator.remove();
+          }
+          displayGamesFromSheet();
         }
-        displayGamesFromSheet();
       }
-    }
-  });
+    }, 150); // 150ms debounce
+  };
+  
+  container.addEventListener('scroll', container.scrollHandler);
 }
 
 async function showAvailableGames() {
@@ -264,6 +278,7 @@ async function showAvailableGames() {
   }
 }
 
+// LAGAÐ: Betri date parsing með öllum formats
 window.addGameFromSheet = async (index) => {
   const game = availableGamesFromSheet[index];
   if (!game) return alert("Leikur fannst ekki!");
@@ -273,56 +288,49 @@ window.addGameFromSheet = async (index) => {
     let gameDate;
     const gameTimeStr = game.gameTime.trim();
     
-    if (game.gameTimeRaw && game.gameTimeRaw.startsWith('Date(')) {
-      const match = game.gameTimeRaw.match(/Date\((\d+),(\d+),(\d+),(\d+),(\d+),(\d+)\)/);
+    // Priority 1: Parse Date() format from Google Sheets
+    if (game.gameTimeRaw && typeof game.gameTimeRaw === 'string' && game.gameTimeRaw.startsWith('Date(')) {
+      const match = game.gameTimeRaw.match(/Date\((\d+),(\d+),(\d+),(\d+),(\d+)(?:,(\d+))?\)/);
       if (match) {
         gameDate = new Date(
-          parseInt(match[1]),
-          parseInt(match[2]),
-          parseInt(match[3]),
-          parseInt(match[4]),
-          parseInt(match[5]),
-          parseInt(match[6])
+          parseInt(match[1]),      // year
+          parseInt(match[2]),      // month (0-indexed in JS)
+          parseInt(match[3]),      // day
+          parseInt(match[4]),      // hour
+          parseInt(match[5]),      // minute
+          parseInt(match[6] || 0)  // second (optional)
         );
       }
     }
     
+    // Priority 2: Parse YYYY-MM-DD HH:MM format
     if (!gameDate || isNaN(gameDate.getTime())) {
-      if (gameTimeStr.includes('/')) {
-        const parts = gameTimeStr.split(' ');
-        const datePart = parts[0];
-        const timePart = parts[1] || '00:00';
+      if (gameTimeStr.match(/^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}/)) {
+        const [datePart, timePart] = gameTimeStr.split(' ');
+        const [year, month, day] = datePart.split('-').map(Number);
+        const [hour, minute] = timePart.split(':').map(Number);
         
-        const dateParts = datePart.split('/');
-        const timeParts = timePart.split(':');
-        
-        gameDate = new Date(
-          parseInt(dateParts[0]),
-          parseInt(dateParts[1]) - 1,
-          parseInt(dateParts[2]),
-          parseInt(timeParts[0]),
-          parseInt(timeParts[1])
-        );
-      } else if (gameTimeStr.includes('-')) {
-        const parts = gameTimeStr.split(' ');
-        const datePart = parts[0];
-        const timePart = parts[1] || '00:00';
-        
-        const dateParts = datePart.split('-');
-        const timeParts = timePart.split(':');
-        
-        gameDate = new Date(
-          parseInt(dateParts[0]),
-          parseInt(dateParts[1]) - 1,
-          parseInt(dateParts[2]),
-          parseInt(timeParts[0]),
-          parseInt(timeParts[1])
-        );
-      } else {
-        gameDate = new Date(gameTimeStr);
+        gameDate = new Date(year, month - 1, day, hour, minute);
       }
     }
     
+    // Priority 3: Parse DD/MM/YYYY HH:MM format
+    if (!gameDate || isNaN(gameDate.getTime())) {
+      if (gameTimeStr.match(/^\d{1,2}\/\d{1,2}\/\d{4}/)) {
+        const [datePart, timePart = '00:00'] = gameTimeStr.split(' ');
+        const [day, month, year] = datePart.split('/').map(Number);
+        const [hour, minute] = timePart.split(':').map(Number);
+        
+        gameDate = new Date(year, month - 1, day, hour, minute);
+      }
+    }
+    
+    // Priority 4: Try native Date parsing as fallback
+    if (!gameDate || isNaN(gameDate.getTime())) {
+      gameDate = new Date(gameTimeStr);
+    }
+    
+    // Final validation
     if (isNaN(gameDate.getTime())) {
       alert(`Villa: Gat ekki lesið dagsetningu: "${gameTimeStr}"`);
       showLoading(false);
@@ -341,7 +349,7 @@ window.addGameFromSheet = async (index) => {
       createdAt: Timestamp.now()
     });
 
-    clearCache();
+    invalidateCache('all');
     await loadAllLeagueData();
     alert(`✅ Leikur bætt við: ${game.homeTeam} vs ${game.awayTeam}`);
   } catch (error) {
@@ -374,11 +382,12 @@ document.getElementById("refreshGamesBtn")?.addEventListener("click", async () =
 });
 
 /* =========================
-   CHAT SYSTEM
+   CHAT SYSTEM - LAGAÐ
 ========================= */
 let chatListener = null;
 const MESSAGE_LIMIT = 50;
 
+// LAGAÐ: Engin optimistic updates, Firebase sér um allt
 async function sendChatMessage() {
   const input = document.getElementById('chatInput');
   const message = input.value.trim();
@@ -401,18 +410,11 @@ async function sendChatMessage() {
   }
   
   try {
-    const tempMsg = {
-      username: username,
-      message: message,
-      timestamp: Timestamp.now(),
-      userId: auth.currentUser.uid,
-      optimistic: true
-    };
-    
-    appendMessage(tempMsg);
+    // Clear input immediately
     input.value = "";
     updateCharCount();
     
+    // Send to Firebase - snapshot listener will update UI
     await addDoc(collection(db, "messages"), {
       leagueId: activeLeagueId,
       userId: auth.currentUser.uid,
@@ -423,9 +425,12 @@ async function sendChatMessage() {
     
   } catch (error) {
     handleError(error, "Villa við að senda skilaboð");
+    // Restore message on error
+    input.value = message;
   }
 }
 
+// LAGAÐ: Clear container completely og engin optimistic logic
 function loadChatMessages() {
   if (!activeLeagueId) {
     document.getElementById('chatCard').style.display = 'none';
@@ -449,6 +454,7 @@ function loadChatMessages() {
   );
   
   chatListener = onSnapshot(q, (snapshot) => {
+    // Clear everything
     container.innerHTML = "";
     
     if (snapshot.empty) {
@@ -464,10 +470,9 @@ function loadChatMessages() {
     
     messages.reverse();
     
+    // Render all messages from Firebase
     messages.forEach(msg => {
-      if (!msg.optimistic) {
-        appendMessage(msg);
-      }
+      appendMessage(msg);
     });
     
     document.getElementById('messageCount').textContent = messages.length;
@@ -499,7 +504,6 @@ function appendMessage(msg) {
     max-width: 75%;
     ${isOwnMessage ? 'margin-left: auto;' : 'margin-right: auto;'}
     word-wrap: break-word;
-    opacity: ${msg.optimistic ? '0.6' : '1'};
     transition: opacity 0.3s ease;
     animation: fadeIn 0.3s ease;
   `;
@@ -611,9 +615,14 @@ document.getElementById('chatInput')?.addEventListener('keypress', (e) => {
 
 document.getElementById('chatInput')?.addEventListener('input', updateCharCount);
 
+// LAGAÐ: Betri cleanup með try-catch
 function cleanupChat() {
   if (chatListener) {
-    chatListener();
+    try {
+      chatListener();
+    } catch (error) {
+      console.error("Error cleaning up chat listener:", error);
+    }
     chatListener = null;
   }
   
@@ -622,7 +631,10 @@ function cleanupChat() {
     container.innerHTML = '<p style="text-align: center; color: #666;">Engin skilaboð ennþá...</p>';
   }
   
-  document.getElementById('chatCard').style.display = 'none';
+  const chatCard = document.getElementById('chatCard');
+  if (chatCard) {
+    chatCard.style.display = 'none';
+  }
 }
 
 window.addEventListener('beforeunload', () => {
@@ -632,7 +644,7 @@ window.addEventListener('beforeunload', () => {
 });
 
 /* =========================
-   CACHE FYRIR GÖGN
+   CACHE - LAGAÐ
 ========================= */
 const cache = {
   leagues: new Map(),
@@ -654,14 +666,30 @@ function setCacheTimestamp(key) {
   cache.lastFetch[key] = Date.now();
 }
 
+// LAGAÐ: Betri cache invalidation
+function invalidateCache(type = 'all') {
+  if (type === 'all') {
+    cache.leagues.clear();
+    cache.members.clear();
+    cache.games.clear();
+    cache.tips.clear();
+    cache.bonusQuestions.clear();
+    cache.bonusAnswers.clear();
+    cache.lastFetch = {};
+  } else if (type === 'league' && activeLeagueId) {
+    cache.leagues.delete(activeLeagueId);
+    delete cache.lastFetch[`league_${activeLeagueId}`];
+  } else if (type === 'games' && activeLeagueId) {
+    Array.from(cache.games.values())
+      .filter(g => g.leagueId === activeLeagueId)
+      .forEach(g => cache.games.delete(g.id));
+    delete cache.lastFetch[`league_${activeLeagueId}`];
+  }
+}
+
+// Keep old function name for compatibility
 function clearCache() {
-  cache.leagues.clear();
-  cache.members.clear();
-  cache.games.clear();
-  cache.tips.clear();
-  cache.bonusQuestions.clear();
-  cache.bonusAnswers.clear();
-  cache.lastFetch = {};
+  invalidateCache('all');
 }
 
 function saveActiveLeague(leagueId) {
@@ -685,6 +713,8 @@ function handleError(error, userMessage = "Villa kom upp") {
     alert("Gögn fundust ekki");
   } else if (error.code === 'already-exists') {
     alert("Þessi færsla er þegar til");
+  } else if (error.code === 'unavailable' || error.message?.includes('network')) {
+    alert("Tenging við Firebase mistókst. Athugaðu netsamband.");
   } else if (error.message) {
     alert(`${userMessage}: ${error.message}`);
   } else {
@@ -921,7 +951,7 @@ document.getElementById("logoutBtn")?.addEventListener("click", async () => {
     await auth.signOut();
     saveActiveLeague(null);
     activeLeagueId = null;
-    clearCache();
+    invalidateCache('all');
     location.reload();
   } catch (error) {
     handleError(error, "Villa við útskráningu");
@@ -965,7 +995,7 @@ document.getElementById("createLeagueBtn")?.addEventListener("click", async () =
       });
     });
 
-    clearCache();
+    invalidateCache('all');
     alert(`Deild "${name.trim()}" búin til!`);
     document.getElementById("leagueName").value = "";
     await loadUserLeagues();
@@ -1013,7 +1043,7 @@ document.getElementById("joinLeagueBtn")?.addEventListener("click", async () => 
       joinedAt: Timestamp.now()
     });
 
-    clearCache();
+    invalidateCache('all');
     alert(`Þú ert núna í deild: ${league.data().name}`);
     document.getElementById("leagueCode").value = "";
     await loadUserLeagues();
@@ -1173,7 +1203,7 @@ document.getElementById("savePointSettingsBtn")?.addEventListener("click", async
     });
     
     currentLeagueSettings = settings;
-    clearCache();
+    invalidateCache('all');
     alert("Stigastillingar vistaðar!");
   } catch (error) {
     handleError(error, "Villa við að vista stillingar");
@@ -1332,7 +1362,7 @@ document.getElementById("addBonusQuestionBtn")?.addEventListener("click", async 
     document.getElementById("bonusQuestionPoints").value = "1";
     document.getElementById("bonusQuestionOptions").value = "";
     
-    clearCache();
+    invalidateCache('all');
     await loadBonusQuestions(currentGameForBonus);
     alert("Bónusspurning bætt við!");
   } catch (error) {
@@ -1394,7 +1424,7 @@ window.setBonusAnswer = async (questionId) => {
       correctAnswer: answer.trim()
     });
     
-    clearCache();
+    invalidateCache('all');
     await loadBonusQuestions(currentGameForBonus);
     await updateBonusPoints(currentGameForBonus);
     alert("Rétt svar sett og stig uppfærð!");
@@ -1419,7 +1449,7 @@ window.deleteBonusQuestion = async (questionId) => {
     batch.delete(doc(db, "bonusQuestions", questionId));
     await batch.commit();
     
-    clearCache();
+    invalidateCache('all');
     await loadBonusQuestions(currentGameForBonus);
     await recalculateAllPoints();
     alert("Spurningu eytt!");
@@ -1430,10 +1460,16 @@ window.deleteBonusQuestion = async (questionId) => {
   }
 };
 
+// LAGAÐ: Betri bonus points uppfærsla
 async function updateBonusPoints(gameId) {
   try {
     const data = await fetchLeagueData(activeLeagueId);
     const questions = data.bonusQuestions.filter(q => q.gameId === gameId && q.correctAnswer);
+    
+    if (questions.length === 0) {
+      console.log("No bonus questions with correct answers for this game");
+      return;
+    }
     
     const batch = writeBatch(db);
     let batchCount = 0;
@@ -1446,31 +1482,53 @@ async function updateBonusPoints(gameId) {
         let points = 0;
         
         if (question.type === "number") {
-          if (parseInt(answer.answer) === parseInt(question.correctAnswer)) {
+          // Number comparison
+          const userNum = parseFloat(answer.answer);
+          const correctNum = parseFloat(question.correctAnswer);
+          if (!isNaN(userNum) && !isNaN(correctNum) && userNum === correctNum) {
+            points = question.points;
+          }
+        } else if (question.type === "yesNo" || question.type === "multipleChoice") {
+          // Exact match for yes/no and multiple choice
+          if (answer.answer.trim() === question.correctAnswer.trim()) {
             points = question.points;
           }
         } else {
-          // LAGAÐ: Betri samanburður með similarity checking
+          // Text comparison with fuzzy matching
           const userAnswer = answer.answer.toLowerCase().trim();
           const correctAnswer = question.correctAnswer.toLowerCase().trim();
           
+          // Exact match
           if (userAnswer === correctAnswer) {
             points = question.points;
-          } else if (correctAnswer.length > 5 && calculateSimilarity(userAnswer, correctAnswer) > 0.85) {
-            points = question.points;
-          } else if (correctAnswer.includes(userAnswer) || userAnswer.includes(correctAnswer)) {
-            if (Math.abs(userAnswer.length - correctAnswer.length) <= 3) {
+          }
+          // High similarity for longer answers
+          else if (correctAnswer.length > 5) {
+            const similarity = calculateSimilarity(userAnswer, correctAnswer);
+            if (similarity > 0.85) {
+              points = question.points;
+            }
+          }
+          // Exact match required for short answers
+          else if (correctAnswer.length <= 5) {
+            if (userAnswer === correctAnswer) {
               points = question.points;
             }
           }
         }
         
-        batch.update(doc(db, "bonusAnswers", answer.id), { points });
-        batchCount++;
-        
-        if (batchCount >= MAX_BATCH) {
-          await batch.commit();
-          batchCount = 0;
+        // Only update if points changed
+        if (answer.points !== points) {
+          batch.update(doc(db, "bonusAnswers", answer.id), { 
+            points,
+            lastUpdated: Timestamp.now()
+          });
+          batchCount++;
+          
+          if (batchCount >= MAX_BATCH) {
+            await batch.commit();
+            batchCount = 0;
+          }
         }
       }
     }
@@ -1479,7 +1537,7 @@ async function updateBonusPoints(gameId) {
       await batch.commit();
     }
     
-    clearCache();
+    invalidateCache('all');
     await recalculateAllPoints();
   } catch (error) {
     console.error("Villa við að uppfæra bónusstig:", error);
@@ -1509,7 +1567,7 @@ async function recalculateAllPoints() {
     }
     
     await batch.commit();
-    clearCache();
+    invalidateCache('all');
     await loadAllLeagueData();
   } catch (error) {
     console.error("Villa við að endurreikna stig:", error);
@@ -1817,7 +1875,7 @@ async function submitBonusAnswer(questionId, gameId) {
       answeredAt: Timestamp.now()
     });
     
-    clearCache();
+    invalidateCache('all');
     alert("Svar vistað!");
     await loadAllLeagueData();
   } catch (error) {
@@ -1862,7 +1920,7 @@ async function submitTip(gameId) {
       tippedAt: Timestamp.now()
     });
 
-    clearCache();
+    invalidateCache('all');
     alert(isUpdate ? "Tip uppfært! ✓" : "Tip skráð! ✓");
     await loadAllLeagueData();
   } catch (error) {
@@ -1898,7 +1956,7 @@ document.getElementById("createGameAdminBtn")?.addEventListener("click", async (
     document.getElementById("adminAwayTeam").value = "";
     document.getElementById("adminGameTime").value = "";
     
-    clearCache();
+    invalidateCache('all');
     await loadAllLeagueData();
     alert("Leikur búinn til");
   } catch (error) {
@@ -1932,7 +1990,7 @@ document.getElementById("deleteGameBtn")?.addEventListener("click", async () => 
     
     await batch.commit();
     
-    clearCache();
+    invalidateCache('all');
     await recalculateAllPoints();
     
     alert("Leik eytt!");
@@ -2016,7 +2074,7 @@ window.removeMember = async (memberId, username) => {
     
     await batch.commit();
     
-    clearCache();
+    invalidateCache('all');
     alert(`${username} hefur verið fjarlægður úr deildinni`);
     
     document.getElementById("viewMembersBtn").click();
@@ -2086,7 +2144,7 @@ document.getElementById("deleteLeagueBtn")?.addEventListener("click", async () =
     
     alert(`Deild "${leagueName}" hefur verið eytt`);
     
-    clearCache();
+    invalidateCache('all');
     saveActiveLeague(null);
     location.reload();
   } catch (error) {
@@ -2096,7 +2154,7 @@ document.getElementById("deleteLeagueBtn")?.addEventListener("click", async () =
   }
 });
 
-// LAGAÐ: Bæta við recalculateAllPoints í setResultBtn
+// LAGAÐ: recalculateAllPoints í setResultBtn
 document.getElementById("setResultBtn")?.addEventListener("click", async () => {
   const gameId = document.getElementById("resultGameSelect").value;
   const homeScore = document.getElementById("resultScoreHome").value;
@@ -2128,14 +2186,11 @@ document.getElementById("setResultBtn")?.addEventListener("click", async () => {
     await batch.commit();
 
     await updateBonusPoints(gameId);
-    
-    // MIKILVÆGT: Uppfæra heildarstig allra
-    await recalculateAllPoints();
 
     document.getElementById("resultScoreHome").value = "";
     document.getElementById("resultScoreAway").value = "";
 
-    clearCache();
+    invalidateCache('all');
     alert("Úrslit og stig uppfærð! ✅");
     
     await loadAllLeagueData();
