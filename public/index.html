@@ -69,6 +69,57 @@
       z-index: 0;
     }
 
+    /* Chat input responsive */
+    .chat-input-wrapper {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      width: 100%;
+    }
+    
+    @media (min-width: 768px) {
+      .chat-input-wrapper {
+        flex-direction: row;
+        align-items: flex-start;
+      }
+      
+      .chat-input-wrapper textarea {
+        flex: 1;
+      }
+      
+      .chat-input-wrapper button {
+        width: auto !important;
+        min-width: 80px;
+        flex-shrink: 0;
+        margin-top: 0 !important;
+      }
+    }
+```
+
+---
+
+## 🎯 **Hvað gerist:**
+
+📱 **Portrait (phones):**
+```
+┌─────────────────┐
+│   Textarea      │
+│   (full width)  │
+│                 │
+└─────────────────┘
+┌─────────────────┐
+│  📨 Senda       │
+└─────────────────┘
+```
+
+💻 **Landscape / Desktop:**
+```
+┌──────────────────┬───────┐
+│   Textarea       │ 📨    │
+│   (flex: 1)      │ Senda │
+│                  │       │
+└──────────────────┴───────┘
+
     /* Loading Indicator - Modern */
     #loadingIndicator {
       display: none;
