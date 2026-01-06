@@ -701,25 +701,15 @@
         <p style="text-align: center; color: #666;">Engin skilaboð ennþá...</p>
       </div>
       
-      <!-- Input - LAGAÐ fyrir mobile -->
-      <div style="display: flex; gap: 10px; align-items: center;">
-        <input 
-          type="text" 
-          id="chatInput" 
-          placeholder="Skrifa skilaboð..."
-          style="flex: 1; min-height: 44px; font-size: 16px; padding: 12px !important; margin: 0;"
-          maxlength="500">
-        <button id="sendMessageBtn" style="margin: 0; padding: 14px 20px; white-space: nowrap;">📨 Senda</button>
-      </div>
-      
-      <div style="display: flex; justify-content: space-between; margin-top: 8px;">
-        <small style="color: #666;">
-          <span id="messageCount">0</span> skilaboð
-        </small>
-        <small style="color: #666;">
-          <span id="chatCharCount">0</span>/500
-        </small>
-      </div>
+     <!-- Input - LAGAÐ fyrir mobile -->
+     <div style="display: flex; gap: 10px; align-items: flex-start;">
+      <textarea 
+        id="chatInput" 
+        placeholder="Skrifa skilaboð..."
+        rows="3"
+        style="flex: 1; min-height: 80px; max-height: 200px; font-size: 16px; padding: 12px; margin: 0; resize: vertical; font-family: inherit; border: 2px solid var(--border); border-radius: 12px; line-height: 1.5;"
+        maxlength="500"></textarea>
+      <button id="sendMessageBtn" style="margin: 0; padding: 8px 12px; white-space: nowrap; height: fit-content; font-size: 14px; min-width: 50px;">📨</button>
     </div>
 
     <!-- STIGATAFLA -->
