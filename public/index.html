@@ -94,31 +94,6 @@
         margin-top: 0 !important;
       }
     }
-```
-
----
-
-## 🎯 **Hvað gerist:**
-
-📱 **Portrait (phones):**
-```
-┌─────────────────┐
-│   Textarea      │
-│   (full width)  │
-│                 │
-└─────────────────┘
-┌─────────────────┐
-│  📨 Senda       │
-└─────────────────┘
-```
-
-💻 **Landscape / Desktop:**
-```
-┌──────────────────┬───────┐
-│   Textarea       │ 📨    │
-│   (flex: 1)      │ Senda │
-│                  │       │
-└──────────────────┴───────┘
 
     /* Loading Indicator - Modern */
     #loadingIndicator {
@@ -737,41 +712,41 @@
     </div>
 
     <!-- DEILDASPJALL -->
-<div class="card" id="chatCard" style="display: none;">
-  <h2>💬 Deildaspjall</h2>
-  
-  <div id="chatMessages" style="
-    min-height: 400px;
-    max-height: 600px; 
-    overflow-y: auto; 
-    padding: 15px; 
-    background: #f9fafb; 
-    border-radius: 12px; 
-    margin-bottom: 15px;
-    border: 2px solid var(--border);">
-    <p style="text-align: center; color: #666;">Engin skilaboð ennþá...</p>
-  </div>
-  
-  <!-- Input - LAGAÐ fyrir mobile með responsive layout -->
-  <div class="chat-input-wrapper">
-    <textarea 
-      id="chatInput" 
-      placeholder="Skrifa skilaboð..."
-      rows="3"
-      style="width: 100%; min-height: 80px; max-height: 200px; font-size: 16px; padding: 12px; margin: 0; resize: vertical; font-family: inherit; border: 2px solid var(--border); border-radius: 12px; line-height: 1.5; box-sizing: border-box;"
-      maxlength="500"></textarea>
-    <button id="sendMessageBtn" style="width: 100%; padding: 12px 20px; margin: 0; font-size: 16px; margin-top: 10px;">📨 Senda</button>
-  </div>
-  
-  <div style="display: flex; justify-content: space-between; margin-top: 8px;">
-    <small style="color: #666;">
-      <span id="messageCount">0</span> skilaboð
-    </small>
-    <small style="color: #666;">
-      <span id="chatCharCount">0</span>/500
-    </small>
-  </div>
-</div>
+    <div class="card" id="chatCard" style="display: none;">
+      <h2>💬 Deildaspjall</h2>
+      
+      <div id="chatMessages" style="
+        min-height: 400px;
+        max-height: 600px; 
+        overflow-y: auto; 
+        padding: 15px; 
+        background: #f9fafb; 
+        border-radius: 12px; 
+        margin-bottom: 15px;
+        border: 2px solid var(--border);">
+        <p style="text-align: center; color: #666;">Engin skilaboð ennþá...</p>
+      </div>
+      
+      <!-- Input - LAGAÐ fyrir mobile með responsive layout -->
+      <div class="chat-input-wrapper">
+        <textarea 
+          id="chatInput" 
+          placeholder="Skrifa skilaboð..."
+          rows="3"
+          style="width: 100%; min-height: 80px; max-height: 200px; font-size: 16px; padding: 12px; margin: 0; resize: vertical; font-family: inherit; border: 2px solid var(--border); border-radius: 12px; line-height: 1.5; box-sizing: border-box;"
+          maxlength="500"></textarea>
+        <button id="sendMessageBtn" style="width: 100%; padding: 12px 20px; margin: 0; font-size: 16px; margin-top: 10px;">📨 Senda</button>
+      </div>
+      
+      <div style="display: flex; justify-content: space-between; margin-top: 8px;">
+        <small style="color: #666;">
+          <span id="messageCount">0</span> skilaboð
+        </small>
+        <small style="color: #666;">
+          <span id="chatCharCount">0</span>/500
+        </small>
+      </div>
+    </div>
 
     <!-- STIGATAFLA -->
     <div class="card">
