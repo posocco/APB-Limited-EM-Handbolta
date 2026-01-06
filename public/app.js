@@ -25,7 +25,7 @@ import {
   Timestamp,
   runTransaction,
   writeBatch
-  orderBy
+  orderBy,
   limit
 } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
 
