@@ -701,15 +701,15 @@
     <p style="text-align: center; color: #666;">Engin skilaboð ennþá...</p>
   </div>
   
-  <!-- Input - LAGAÐ fyrir mobile -->
-  <div style="display: flex; gap: 10px; align-items: flex-start; width: 100%;">
+  <!-- Input - LAGAÐ fyrir mobile með responsive layout -->
+  <div class="chat-input-wrapper">
     <textarea 
       id="chatInput" 
       placeholder="Skrifa skilaboð..."
       rows="3"
-      style="flex: 1; width: 100%; min-height: 80px; max-height: 200px; font-size: 16px; padding: 12px; margin: 0; resize: vertical; font-family: inherit; border: 2px solid var(--border); border-radius: 12px; line-height: 1.5; box-sizing: border-box;"
+      style="width: 100%; min-height: 80px; max-height: 200px; font-size: 16px; padding: 12px; margin: 0; resize: vertical; font-family: inherit; border: 2px solid var(--border); border-radius: 12px; line-height: 1.5; box-sizing: border-box;"
       maxlength="500"></textarea>
-    <button id="sendMessageBtn" style="margin: 0; padding: 10px 14px; white-space: nowrap; height: fit-content; font-size: 16px; min-width: 60px; flex-shrink: 0;">📨</button>
+    <button id="sendMessageBtn" style="width: 100%; padding: 12px 20px; margin: 0; font-size: 16px; margin-top: 10px;">📨 Senda</button>
   </div>
   
   <div style="display: flex; justify-content: space-between; margin-top: 8px;">
