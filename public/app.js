@@ -1764,9 +1764,8 @@ async function renderGames(data) {
     if (!a.gameTime && !b.gameTime) return 0;
     if (!a.gameTime) return 1;
     if (!b.gameTime) return -1;
-    const timeA = a.gameTime.toMillis ? a.gameTime.toMillis() : (a.gameTime.seconds * 1000);
-const timeB = b.gameTime.toMillis ? b.gameTime.toMillis() : (b.gameTime.seconds * 1000);
-return timeA - timeB;
+    return a.gameTime.toMillis() - b.gameTime.toMillis();
+  });
   
   const tipsMap = new Map();
   data.tips.forEach(tip => {
