@@ -791,7 +791,49 @@ const DEFAULT_POINTS = {
   correctOutcome: 2
 };
 
-
+async function fetchLeagueData(leagueId) {
+  const cacheKey = `league_${leagueId}`;
+  
+  // 1. Athuga in-memory cache
+  if (isCacheValid(cacheKey)) {
+    console.log('⚡ Using in-memory cache');
+    return {
+      league: cache.leagues.get(leagueId),
+      members: Array.from(cache.members.values()).filter(m => m.leagueId === leagueId),
+      games: Array.from(cache.games.values()).filter(g => g.leagueId === leagueId),
+      tips: Array.from(cache.tips.values()).filter(t => t.leagueId === leagueId),
+      bonusQuestions: Array.from(cache.bonusQuestions.values()).filter(q => q.leagueId === leagueId),
+      bonusAnswers: Array.from(cache.bonusAnswers.values()).filter(a => a.leagueId === leagueId)
+    };
+  }
+  
+  // 2. Athuga localStorage cache
+  const localCached = getCachedData(cacheKey);
+  if (localCached) {
+    console.log('📦 Using localStorage cache');
+    
+    // Fylla in-memory cache
+    if (localCached.league) cache.leagues.set(leagueId, localCached.league);
+    localCached.members?.forEach(m => cache.members.set(m.id, m));
+    localCached.games?.forEach(g => cache.games.set(g.id, g));
+    localCached.tips?.forEach(t => cache.tips.set(t.id, t));
+    localCached.bonusQuestions?.forEach(q => cache.bonusQuestions.set(q.id, q));
+    localCached.bonusAnswers?.forEach(a => cache.bonusAnswers.set(a.id, a));
+    
+    setCacheTimestamp(cacheKey);
+    
+    // Sækja ný gögn í bakgrunni
+    fetchLeagueDataFromFirebase(leagueId).catch(err => 
+      console.error('Background fetch failed:', err)
+    );
+    
+    return localCached;
+  }
+  
+  // 3. Sækja úr Firebase
+  console.log('🔥 Fetching from Firebase');
+  return await fetchLeagueDataFromFirebase(leagueId);
+}
 
 async function requestNotificationPermission() {
   if (!("Notification" in window)) {
