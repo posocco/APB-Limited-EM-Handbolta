@@ -1365,7 +1365,7 @@ function hasGameStarted(gameTime) {
   if (!gameTime) return false;
   try {
     const now = new Date();
-    const game = gameTime.toDate();
+    const game = gameTime.toDate ? gameTime.toDate() : new Date(getTimestamp(gameTime));
     return now >= game;
   } catch (error) {
     console.error("Villa við að athuga hvort leikur er byrjaður:", error);
