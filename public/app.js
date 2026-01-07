@@ -743,6 +743,7 @@ const cache = {
 
 const CACHE_DURATION = 30000;
 
+
 function isCacheValid(key) {
   return cache.lastFetch[key] && (Date.now() - cache.lastFetch[key] < CACHE_DURATION);
 }
