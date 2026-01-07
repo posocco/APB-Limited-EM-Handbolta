@@ -1335,7 +1335,7 @@ document.getElementById("savePointSettingsBtn")?.addEventListener("click", async
 function formatDateTime(timestamp) {
   if (!timestamp) return "";
   try {
-    const date = timestamp.toDate ? timestamp.toDate() : new Date(getTimestamp(timestamp));
+    const date = timestamp.toDate();
     const day = String(date.getDate()).padStart(2, '0');
     const month = String(date.getMonth() + 1).padStart(2, '0');
     const year = date.getFullYear();
@@ -1348,8 +1348,8 @@ function formatDateTime(timestamp) {
   }
 }
 
-function hasGameStarted(gameTime) {
-  if (!gameTime) return false;
+function canTip(gameTime) {
+  if (!gameTime) return true;
   try {
     const now = new Date();
     const game = gameTime.toDate();
