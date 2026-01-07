@@ -28,7 +28,7 @@ import {
   orderBy,
   limit,
   onSnapshot
-  chat-so
+  chat-social
 } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
 
 let activeLeagueId = null;
