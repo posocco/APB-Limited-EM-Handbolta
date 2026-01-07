@@ -741,12 +741,16 @@ function invalidateCache(type = 'all') {
 
     clearCachedData(`league_${activeLeagueId}`);
 
-    
+
   } else if (type === 'games' && activeLeagueId) {
     Array.from(cache.games.values())
       .filter(g => g.leagueId === activeLeagueId)
       .forEach(g => cache.games.delete(g.id));
     delete cache.lastFetch[`league_${activeLeagueId}`];
+
+    clearCachedData(`league_${activeLeagueId}_games`);
+
+    
   }
 }
 
