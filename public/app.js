@@ -834,7 +834,63 @@ async function fetchLeagueData(leagueId) {
   console.log('🔥 Fetching from Firebase');
   return await fetchLeagueDataFromFirebase(leagueId);
 }
+async function fetchLeagueDataFromFirebase(leagueId) {
+  const [leagueSnap, membersSnap, gamesSnap, tipsSnap, bonusQSnap, bonusASnap] = await Promise.all([
+    getDoc(doc(db, "leagues", leagueId)),
+    getDocs(query(collection(db, "leagueMembers"), where("leagueId", "==", leagueId))),
+    getDocs(query(collection(db, "games"), where("leagueId", "==", leagueId))),
+    getDocs(query(collection(db, "tips"), where("leagueId", "==", leagueId))),
+    getDocs(query(collection(db, "bonusQuestions"), where("leagueId", "==", leagueId))),
+    getDocs(query(collection(db, "bonusAnswers"), where("leagueId", "==", leagueId)))
+  ]);
 
+  const league = leagueSnap.exists() ? { id: leagueId, ...leagueSnap.data() } : null;
+  if (league) cache.leagues.set(leagueId, league);
+
+  const members = [];
+  membersSnap.forEach(docSnap => {
+    const data = { id: docSnap.id, ...docSnap.data() };
+    cache.members.set(docSnap.id, data);
+    members.push(data);
+  });
+
+  const games = [];
+  gamesSnap.forEach(docSnap => {
+    const data = { id: docSnap.id, ...docSnap.data() };
+    cache.games.set(docSnap.id, data);
+    games.push(data);
+  });
+
+  const tips = [];
+  tipsSnap.forEach(docSnap => {
+    const data = { id: docSnap.id, ...docSnap.data() };
+    cache.tips.set(docSnap.id, data);
+    tips.push(data);
+  });
+
+  const bonusQuestions = [];
+  bonusQSnap.forEach(docSnap => {
+    const data = { id: docSnap.id, ...docSnap.data() };
+    cache.bonusQuestions.set(docSnap.id, data);
+    bonusQuestions.push(data);
+  });
+
+  const bonusAnswers = [];
+  bonusASnap.forEach(docSnap => {
+    const data = { id: docSnap.id, ...docSnap.data() };
+    cache.bonusAnswers.set(docSnap.id, data);
+    bonusAnswers.push(data);
+  });
+
+  const cacheKey = `league_${leagueId}`;
+  setCacheTimestamp(cacheKey);
+  
+  // Vista í localStorage
+  const dataToCache = { league, members, games, tips, bonusQuestions, bonusAnswers };
+  setCachedData(cacheKey, dataToCache);
+
+  return dataToCache;
+}
 async function requestNotificationPermission() {
   if (!("Notification" in window)) {
     console.log("Vafrinn styður ekki tilkynningar");
