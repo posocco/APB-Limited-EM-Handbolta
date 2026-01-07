@@ -752,7 +752,6 @@ function invalidateCache(type = 'all') {
     cache.bonusQuestions.clear();
     cache.bonusAnswers.clear();
     cache.lastFetch = {};
-
     clearCachedData();
 
 
