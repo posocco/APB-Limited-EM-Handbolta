@@ -742,6 +742,431 @@ const cache = {
 };
 
 const CACHE_DURATION = 30000;
+/* =========================
+   SOCIAL FEATURES FYRIR CHAT
+   Bæta við í app.js
+========================= */
+
+// EMOJI PICKER DATA
+const EMOJI_CATEGORIES = {
+  sports: ['⚽', '🏆', '🥅', '🎯', '🔥', '⚡', '💪', '👏', '🙌', '✨'],
+  emotions: ['😂', '😊', '😍', '🤩', '😎', '😭', '😱', '🤔', '😤', '🥳'],
+  celebrations: ['🎉', '🎊', '🎈', '🍾', '🥂', '🏅', '👑', '💎', '⭐', '✅'],
+  reactions: ['👍', '👎', '❤️', '💔', '🔥', '💯', '👀', '🤝', '💪', '🙏']
+};
+
+// ONLINE STATUS TRACKING
+let onlineUsers = new Map();
+let presenceListener = null;
+let heartbeatInterval = null;
+
+// Initialize online presence for current user
+async function initializePresence() {
+  if (!auth.currentUser || !activeLeagueId) return;
+  
+  const userId = auth.currentUser.uid;
+  const presenceRef = doc(db, "presence", `${activeLeagueId}_${userId}`);
+  
+  // Set user as online
+  await setDoc(presenceRef, {
+    userId: userId,
+    leagueId: activeLeagueId,
+    username: document.getElementById("username")?.value || "Óþekktur",
+    status: "online",
+    lastSeen: Timestamp.now()
+  });
+  
+  // Update heartbeat every 30 seconds
+  if (heartbeatInterval) clearInterval(heartbeatInterval);
+  heartbeatInterval = setInterval(async () => {
+    try {
+      await updateDoc(presenceRef, {
+        lastSeen: Timestamp.now()
+      });
+    } catch (error) {
+      console.error("Heartbeat error:", error);
+    }
+  }, 30000);
+  
+  // Set offline on disconnect
+  window.addEventListener('beforeunload', async () => {
+    try {
+      await updateDoc(presenceRef, {
+        status: "offline",
+        lastSeen: Timestamp.now()
+      });
+    } catch (error) {
+      console.error("Offline status error:", error);
+    }
+  });
+  
+  // Listen for other users' presence
+  startPresenceListener();
+}
+
+function startPresenceListener() {
+  if (!activeLeagueId) return;
+  
+  if (presenceListener) presenceListener();
+  
+  const q = query(
+    collection(db, "presence"),
+    where("leagueId", "==", activeLeagueId)
+  );
+  
+  presenceListener = onSnapshot(q, (snapshot) => {
+    onlineUsers.clear();
+    
+    const now = Date.now();
+    snapshot.forEach(doc => {
+      const data = doc.data();
+      const lastSeen = data.lastSeen?.toMillis() || 0;
+      const isOnline = (now - lastSeen) < 60000; // Online if seen in last minute
+      
+      if (isOnline) {
+        onlineUsers.set(data.userId, data.username);
+      }
+    });
+    
+    updateOnlineIndicators();
+  });
+}
+
+function updateOnlineIndicators() {
+  // Update online count
+  const count = onlineUsers.size;
+  const countElement = document.getElementById('onlineCount');
+  if (countElement) {
+    countElement.textContent = `${count} online`;
+    countElement.style.color = count > 0 ? '#10b981' : '#6b7280';
+  }
+  
+  // Update message indicators (if messages are already rendered)
+  document.querySelectorAll('[data-user-id]').forEach(msgElement => {
+    const userId = msgElement.getAttribute('data-user-id');
+    const indicator = msgElement.querySelector('.online-indicator');
+    if (indicator) {
+      indicator.style.display = onlineUsers.has(userId) ? 'inline-block' : 'none';
+    }
+  });
+}
+
+function cleanupPresence() {
+  if (heartbeatInterval) {
+    clearInterval(heartbeatInterval);
+    heartbeatInterval = null;
+  }
+  
+  if (presenceListener) {
+    presenceListener();
+    presenceListener = null;
+  }
+  
+  onlineUsers.clear();
+}
+
+// EMOJI PICKER
+function createEmojiPicker() {
+  const picker = document.createElement('div');
+  picker.id = 'emojiPicker';
+  picker.style.cssText = `
+    position: absolute;
+    bottom: 100%;
+    right: 0;
+    background: white;
+    border: 2px solid #e5e7eb;
+    border-radius: 16px;
+    padding: 12px;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.15);
+    display: none;
+    z-index: 1000;
+    max-width: 320px;
+    animation: slideUp 0.2s ease;
+  `;
+  
+  let html = '<div style="display: flex; flex-direction: column; gap: 8px;">';
+  
+  Object.entries(EMOJI_CATEGORIES).forEach(([category, emojis]) => {
+    const categoryName = {
+      sports: '⚽ Íþróttir',
+      emotions: '😊 Tilfinningar',
+      celebrations: '🎉 Fögnuður',
+      reactions: '👍 Viðbrögð'
+    }[category];
+    
+    html += `
+      <div>
+        <div style="font-size: 0.75rem; font-weight: 600; color: #6b7280; margin-bottom: 4px; text-transform: uppercase;">${categoryName}</div>
+        <div style="display: flex; flex-wrap: wrap; gap: 4px;">
+    `;
+    
+    emojis.forEach(emoji => {
+      html += `
+        <button class="emoji-btn" data-emoji="${emoji}" 
+          style="
+            font-size: 1.5rem;
+            padding: 8px;
+            border: none;
+            background: transparent;
+            cursor: pointer;
+            border-radius: 8px;
+            transition: all 0.2s;
+          "
+          onmouseover="this.style.background='#f3f4f6'; this.style.transform='scale(1.2)'"
+          onmouseout="this.style.background='transparent'; this.style.transform='scale(1)'"
+        >${emoji}</button>
+      `;
+    });
+    
+    html += '</div></div>';
+  });
+  
+  html += '</div>';
+  picker.innerHTML = html;
+  
+  // Add emoji click handlers
+  picker.querySelectorAll('.emoji-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const emoji = e.target.getAttribute('data-emoji');
+      insertEmoji(emoji);
+      toggleEmojiPicker();
+    });
+  });
+  
+  return picker;
+}
+
+function toggleEmojiPicker() {
+  let picker = document.getElementById('emojiPicker');
+  
+  if (!picker) {
+    const container = document.querySelector('#chatInputContainer');
+    if (!container) return;
+    
+    picker = createEmojiPicker();
+    container.style.position = 'relative';
+    container.appendChild(picker);
+  }
+  
+  picker.style.display = picker.style.display === 'none' ? 'block' : 'none';
+}
+
+function insertEmoji(emoji) {
+  const input = document.getElementById('chatInput');
+  if (!input) return;
+  
+  const cursorPos = input.selectionStart;
+  const textBefore = input.value.substring(0, cursorPos);
+  const textAfter = input.value.substring(cursorPos);
+  
+  input.value = textBefore + emoji + textAfter;
+  input.focus();
+  
+  // Move cursor after emoji
+  const newPos = cursorPos + emoji.length;
+  input.setSelectionRange(newPos, newPos);
+  
+  updateCharCount();
+}
+
+// LIKE FUNCTIONALITY
+async function likeMessage(messageId, currentLikes = []) {
+  if (!auth.currentUser) return;
+  
+  const userId = auth.currentUser.uid;
+  const messageRef = doc(db, "messages", messageId);
+  
+  try {
+    let newLikes;
+    if (currentLikes.includes(userId)) {
+      // Unlike
+      newLikes = currentLikes.filter(id => id !== userId);
+    } else {
+      // Like
+      newLikes = [...currentLikes, userId];
+    }
+    
+    await updateDoc(messageRef, {
+      likes: newLikes,
+      likeCount: newLikes.length
+    });
+  } catch (error) {
+    console.error("Like error:", error);
+  }
+}
+
+// ENHANCED MESSAGE RENDERING WITH SOCIAL FEATURES
+function appendMessageWithSocial(msg) {
+  const container = document.getElementById('chatMessages');
+  if (!container) return;
+  
+  const isOwnMessage = msg.userId === auth.currentUser.uid;
+  const likes = msg.likes || [];
+  const likeCount = msg.likeCount || 0;
+  const hasLiked = likes.includes(auth.currentUser.uid);
+  const isOnline = onlineUsers.has(msg.userId);
+  
+  const div = document.createElement('div');
+  div.setAttribute('data-user-id', msg.userId);
+  div.style.cssText = `
+    padding: 12px 16px;
+    margin: 10px 0;
+    border-radius: 16px;
+    background: ${isOwnMessage ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' : 'white'};
+    color: ${isOwnMessage ? 'white' : '#1f2937'};
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    max-width: 75%;
+    ${isOwnMessage ? 'margin-left: auto;' : 'margin-right: auto;'}
+    word-wrap: break-word;
+    transition: all 0.3s ease;
+    animation: messageSlideIn 0.3s ease;
+    position: relative;
+  `;
+  
+  const time = msg.timestamp ? formatChatTime(msg.timestamp.toDate()) : 'Núna';
+  
+  div.innerHTML = `
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+      <div style="display: flex; align-items: center; gap: 6px;">
+        <strong style="font-size: 0.9rem;">${escapeHtml(msg.username)}</strong>
+        ${isOnline ? `
+          <span class="online-indicator" style="
+            width: 8px;
+            height: 8px;
+            background: #10b981;
+            border-radius: 50%;
+            display: inline-block;
+            box-shadow: 0 0 0 2px ${isOwnMessage ? 'rgba(255,255,255,0.3)' : 'rgba(16,185,129,0.3)'};
+          " title="Online"></span>
+        ` : ''}
+      </div>
+      <small style="opacity: 0.7; font-size: 0.75rem;">${time}</small>
+    </div>
+    
+    <div style="font-size: 1rem; line-height: 1.5; margin-bottom: 8px;">
+      ${escapeHtml(msg.message)}
+    </div>
+    
+    <div style="display: flex; align-items: center; gap: 12px; margin-top: 8px; padding-top: 8px; border-top: 1px solid ${isOwnMessage ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.1)'};">
+      <button 
+        onclick="likeMessage('${msg.id}', ${JSON.stringify(likes).replace(/"/g, '&quot;')})"
+        style="
+          background: none;
+          border: none;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          gap: 4px;
+          padding: 4px 8px;
+          border-radius: 12px;
+          transition: all 0.2s;
+          color: ${isOwnMessage ? 'white' : '#6b7280'};
+          font-size: 0.9rem;
+        "
+        onmouseover="this.style.background='${isOwnMessage ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.05)'}'"
+        onmouseout="this.style.background='none'"
+      >
+        <span style="font-size: 1.1rem; transition: transform 0.2s;">${hasLiked ? '❤️' : '🤍'}</span>
+        ${likeCount > 0 ? `<span style="font-size: 0.85rem; font-weight: 600;">${likeCount}</span>` : ''}
+      </button>
+    </div>
+  `;
+  
+  container.appendChild(div);
+}
+
+// Add CSS animations
+const style = document.createElement('style');
+style.textContent = `
+  @keyframes messageSlideIn {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  
+  @keyframes slideUp {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  
+  .emoji-btn:active {
+    transform: scale(0.9) !important;
+  }
+`;
+document.head.appendChild(style);
+
+// UPDATED loadChatMessages TO USE SOCIAL FEATURES
+function loadChatMessagesWithSocial() {
+  if (!activeLeagueId) {
+    document.getElementById('chatCard').style.display = 'none';
+    return;
+  }
+  
+  if (chatListener) {
+    chatListener();
+  }
+  
+  const container = document.getElementById('chatMessages');
+  if (!container) return;
+  
+  container.innerHTML = '<p style="text-align: center; color: #666;">Hleð skilaboðum...</p>';
+  
+  const q = query(
+    collection(db, "messages"),
+    where("leagueId", "==", activeLeagueId),
+    orderBy("timestamp", "asc"),
+    limit(MESSAGE_LIMIT)
+  );
+  
+  chatListener = onSnapshot(q, (snapshot) => {
+    container.innerHTML = "";
+    
+    if (snapshot.empty) {
+      container.innerHTML = '<p style="text-align: center; color: #666;">Engin skilaboð ennþá. Vertu fyrstur til að skrifa! 👋</p>';
+      document.getElementById('messageCount').textContent = "0";
+      return;
+    }
+    
+    const messages = [];
+    snapshot.forEach(doc => {
+      messages.push({ id: doc.id, ...doc.data() });
+    });
+    
+    messages.reverse();
+    
+    messages.forEach(msg => {
+      appendMessageWithSocial(msg);
+    });
+    
+    document.getElementById('messageCount').textContent = messages.length;
+    
+    setTimeout(() => {
+      container.scrollTop = container.scrollHeight;
+    }, 100);
+    
+  }, (error) => {
+    console.error("Villa við að hlaða skilaboðum:", error);
+    container.innerHTML = '<p style="text-align: center; color: #dc3545;">Villa við að hlaða skilaboð</p>';
+  });
+}
+
+// EXPORT FUNCTIONS
+window.likeMessage = likeMessage;
+window.toggleEmojiPicker = toggleEmojiPicker;
+window.initializePresence = initializePresence;
+window.cleanupPresence = cleanupPresence;
+window.loadChatMessagesWithSocial = loadChatMessagesWithSocial;
 
 
 function isCacheValid(key) {
