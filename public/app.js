@@ -1348,8 +1348,8 @@ function formatDateTime(timestamp) {
   }
 }
 
-function canTip(gameTime) {
-  if (!gameTime) return true;
+function hasGameStarted(gameTime) {
+  if (!gameTime) return false;
   try {
     const now = new Date();
     const game = gameTime.toDate();
