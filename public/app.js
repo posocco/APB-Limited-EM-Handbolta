@@ -437,6 +437,8 @@ window.addGameFromSheet = async (index) => {
 };
 
 document.addEventListener('DOMContentLoaded', () => {
+  clearOldCache();  // ← BÆTA VIÐ
+  
   const searchInput = document.getElementById('gameSearchInput');
   if (searchInput) {
     searchInput.addEventListener('input', (e) => {
