@@ -732,7 +732,8 @@ function invalidateCache(type = 'all') {
     cache.bonusAnswers.clear();
     cache.lastFetch = {};
 
-    clearCached
+    clearCachedData();
+    
   } else if (type === 'league' && activeLeagueId) {
     cache.leagues.delete(activeLeagueId);
     delete cache.lastFetch[`league_${activeLeagueId}`];
