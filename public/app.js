@@ -34,27 +34,43 @@ let activeLeagueId = null;
 let currentLeagueSettings = null;
 let currentGameForBonus = null;
 
-/* =========================
-   LOCALSTORAGE CACHE
-========================= */
-
+/* LOCALSTORAGE CACHE */
 const CACHE_VERSION = 'v1.0';
-const CACHE_EXPIRY = 5 * 60 * 1000; // 5 mínútur
+const CACHE_EXPIRY = 5 * 60 * 1000;
+
+function serializeData(data) {
+  return JSON.parse(JSON.stringify(data, (key, value) => {
+    if (value && typeof value === 'object' && value.seconds !== undefined && value.nanoseconds !== undefined) {
+      return { _isTimestamp: true, seconds: value.seconds, nanoseconds: value.nanoseconds };
+    }
+    return value;
+  }));
+}
+
+function deserializeData(data) {
+  return JSON.parse(JSON.stringify(data, (key, value) => {
+    if (value && value._isTimestamp) {
+      return {
+        seconds: value.seconds,
+        nanoseconds: value.nanoseconds,
+        toDate: function() { return new Date(this.seconds * 1000 + this.nanoseconds / 1000000); },
+        toMillis: function() { return this.seconds * 1000 + Math.floor(this.nanoseconds / 1000000); }
+      };
+    }
+    return value;
+  }));
+}
 
 function getCachedData(key) {
   try {
     const cached = localStorage.getItem(`cache_${CACHE_VERSION}_${key}`);
     if (!cached) return null;
-    
     const data = JSON.parse(cached);
-    const age = Date.now() - data.timestamp;
-    
-    if (age > CACHE_EXPIRY) {
+    if (Date.now() - data.timestamp > CACHE_EXPIRY) {
       localStorage.removeItem(`cache_${CACHE_VERSION}_${key}`);
       return null;
     }
-    
-    return data.value;
+    return deserializeData(data.value);
   } catch (error) {
     console.error('Cache read error:', error);
     return null;
@@ -63,10 +79,7 @@ function getCachedData(key) {
 
 function setCachedData(key, value) {
   try {
-    const cacheData = {
-      value: value,
-      timestamp: Date.now()
-    };
+    const cacheData = { value: serializeData(value), timestamp: Date.now() };
     localStorage.setItem(`cache_${CACHE_VERSION}_${key}`, JSON.stringify(cacheData));
   } catch (error) {
     console.error('Cache write error:', error);
@@ -79,14 +92,22 @@ function clearCachedData(key) {
       localStorage.removeItem(`cache_${CACHE_VERSION}_${key}`);
     } else {
       Object.keys(localStorage).forEach(k => {
-        if (k.startsWith(`cache_${CACHE_VERSION}_`)) {
-          localStorage.removeItem(k);
-        }
+        if (k.startsWith(`cache_${CACHE_VERSION}_`)) localStorage.removeItem(k);
       });
     }
   } catch (error) {
     console.error('Cache clear error:', error);
   }
+}
+
+function clearOldCache() {
+  try {
+    Object.keys(localStorage).forEach(key => {
+      if (key.startsWith('cache_') && !key.startsWith(`cache_${CACHE_VERSION}_`)) {
+        localStorage.removeItem(key);
+      }
+    });
+  } catch (error) {}
 }
 
 // GOOGLE SHEETS INTEGRATION
@@ -750,7 +771,7 @@ function invalidateCache(type = 'all') {
 
     clearCachedData(`league_${activeLeagueId}_games`);
 
-    
+
   }
 }
 
