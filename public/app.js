@@ -1377,7 +1377,7 @@ function getTimeUntilGame(gameTime) {
   if (!gameTime) return "";
   try {
     const now = new Date();
-    const game = gameTime.toDate();
+    const game = gameTime.toDate ? gameTime.toDate() : new Date(getTimestamp(gameTime));
     const diffMinutes = Math.floor((game - now) / (1000 * 60));
     
     if (diffMinutes < 0) return "Leikur hafinn";
