@@ -520,7 +520,6 @@ function loadChatMessages() {
   loadChatMessagesWithSocial();
 }
 
-
 function formatChatTime(date) {
   const now = new Date();
   const diffMs = now - date;
