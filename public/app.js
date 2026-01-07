@@ -517,59 +517,7 @@ async function sendChatMessage() {
 
 // LAGAÐ: Clear container completely og engin optimistic logic
 function loadChatMessages() {
-  if (!activeLeagueId) {
-    document.getElementById('chatCard').style.display = 'none';
-    return;
-  }
-  
-  if (chatListener) {
-    chatListener();
-  }
-  
-  const container = document.getElementById('chatMessages');
-  if (!container) return;
-  
-  container.innerHTML = '<p style="text-align: center; color: #666;">Hleð skilaboðum...</p>';
-  
-  const q = query(
-    collection(db, "messages"),
-    where("leagueId", "==", activeLeagueId),
-    orderBy("timestamp", "asc"),  // ✅ LAGAÐ - asc í staðinn fyrir desc
-    limit(MESSAGE_LIMIT)
-  );
-  
-  chatListener = onSnapshot(q, (snapshot) => {
-    // Clear everything
-    container.innerHTML = "";
-    
-    if (snapshot.empty) {
-      container.innerHTML = '<p style="text-align: center; color: #666;">Engin skilaboð ennþá. Vertu fyrstur til að skrifa! 👋</p>';
-      document.getElementById('messageCount').textContent = "0";
-      return;
-    }
-    
-    const messages = [];
-    snapshot.forEach(doc => {
-      messages.push({ id: doc.id, ...doc.data() });
-    });
-    
-    messages.reverse();
-    
-    // Render all messages from Firebase
-    messages.forEach(msg => {
-      appendMessage(msg);
-    });
-    
-    document.getElementById('messageCount').textContent = messages.length;
-    
-    setTimeout(() => {
-      container.scrollTop = container.scrollHeight;
-    }, 100);
-    
-  }, (error) => {
-    console.error("Villa við að hlaða skilaboðum:", error);
-    container.innerHTML = '<p style="text-align: center; color: #dc3545;">Villa við að hlaða skilaboð</p>';
-  });
+  loadChatMessagesWithSocial();
 }
 
 function appendMessage(msg) {
