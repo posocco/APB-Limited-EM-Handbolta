@@ -754,7 +754,6 @@ function invalidateCache(type = 'all') {
     cache.lastFetch = {};
     clearCachedData();
 
-
   } else if (type === 'league' && activeLeagueId) {
     cache.leagues.delete(activeLeagueId);
     delete cache.lastFetch[`league_${activeLeagueId}`];
