@@ -1609,6 +1609,7 @@ async function loadAllLeagueData() {
   
   document.getElementById('chatCard').style.display = 'block';
   loadChatMessages();
+  initializePresence();
 }
 
 async function loadLeagueSettings() {
