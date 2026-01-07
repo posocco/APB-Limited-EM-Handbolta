@@ -616,6 +616,7 @@ document.getElementById('chatInput')?.addEventListener('input', updateCharCount)
 
 // LAGAÐ: Betri cleanup með try-catch
 function cleanupChat() {
+  cleanupPresence();
   if (chatListener) {
     try {
       chatListener();
