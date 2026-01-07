@@ -921,6 +921,7 @@ async function fetchLeagueDataFromFirebase(leagueId) {
   setCachedData(cacheKey, dataToCache);
   return dataToCache;
 }
+
 async function requestNotificationPermission() {
   if (!("Notification" in window)) {
     console.log("Vafrinn styður ekki tilkynningar");
