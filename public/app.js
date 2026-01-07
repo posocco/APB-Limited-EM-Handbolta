@@ -99,7 +99,14 @@ function clearCachedData(key) {
     console.error('Cache clear error:', error);
   }
 }
-
+// Helper til að fá millisekúndur úr hvaða timestamp sem er
+function getTimestamp(timeObj) {
+  if (!timeObj) return 0;
+  if (timeObj.toMillis) return timeObj.toMillis();
+  if (timeObj.seconds) return timeObj.seconds * 1000;
+  if (timeObj instanceof Date) return timeObj.getTime();
+  return 0;
+}
 function clearOldCache() {
   try {
     Object.keys(localStorage).forEach(key => {
