@@ -520,39 +520,6 @@ function loadChatMessages() {
   loadChatMessagesWithSocial();
 }
 
-function appendMessage(msg) {
-  const container = document.getElementById('chatMessages');
-  if (!container) return;
-  
-  const isOwnMessage = msg.userId === auth.currentUser.uid;
-  
-  const div = document.createElement('div');
-  div.style.cssText = `
-    padding: 10px 14px;
-    margin: 8px 0;
-    border-radius: 16px;
-    background: ${isOwnMessage ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' : 'white'};
-    color: ${isOwnMessage ? 'white' : '#1f2937'};
-    box-shadow: var(--shadow-sm);
-    max-width: 75%;
-    ${isOwnMessage ? 'margin-left: auto;' : 'margin-right: auto;'}
-    word-wrap: break-word;
-    transition: opacity 0.3s ease;
-    animation: fadeIn 0.3s ease;
-  `;
-  
-  const time = msg.timestamp ? formatChatTime(msg.timestamp.toDate()) : 'Núna';
-  
-  div.innerHTML = `
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-      <strong style="font-size: 0.9rem;">${escapeHtml(msg.username)}</strong>
-      <small style="opacity: 0.7; font-size: 0.75rem;">${time}</small>
-    </div>
-    <div style="font-size: 0.95rem; line-height: 1.4;">${escapeHtml(msg.message)}</div>
-  `;
-  
-  container.appendChild(div);
-}
 
 function formatChatTime(date) {
   const now = new Date();
