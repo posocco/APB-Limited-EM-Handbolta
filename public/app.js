@@ -791,71 +791,7 @@ const DEFAULT_POINTS = {
   correctOutcome: 2
 };
 
-async function fetchLeagueData(leagueId) {
-  const cacheKey = `league_${leagueId}`;
-  
-  if (isCacheValid(cacheKey)) {
-    return {
-      league: cache.leagues.get(leagueId),
-      members: Array.from(cache.members.values()).filter(m => m.leagueId === leagueId),
-      games: Array.from(cache.games.values()).filter(g => g.leagueId === leagueId),
-      tips: Array.from(cache.tips.values()).filter(t => t.leagueId === leagueId),
-      bonusQuestions: Array.from(cache.bonusQuestions.values()).filter(q => q.leagueId === leagueId),
-      bonusAnswers: Array.from(cache.bonusAnswers.values()).filter(a => a.leagueId === leagueId)
-    };
-  }
 
-  const [leagueSnap, membersSnap, gamesSnap, tipsSnap, bonusQSnap, bonusASnap] = await Promise.all([
-    getDoc(doc(db, "leagues", leagueId)),
-    getDocs(query(collection(db, "leagueMembers"), where("leagueId", "==", leagueId))),
-    getDocs(query(collection(db, "games"), where("leagueId", "==", leagueId))),
-    getDocs(query(collection(db, "tips"), where("leagueId", "==", leagueId))),
-    getDocs(query(collection(db, "bonusQuestions"), where("leagueId", "==", leagueId))),
-    getDocs(query(collection(db, "bonusAnswers"), where("leagueId", "==", leagueId)))
-  ]);
-
-  const league = leagueSnap.exists() ? { id: leagueId, ...leagueSnap.data() } : null;
-  if (league) cache.leagues.set(leagueId, league);
-
-  const members = [];
-  membersSnap.forEach(docSnap => {
-    const data = { id: docSnap.id, ...docSnap.data() };
-    cache.members.set(docSnap.id, data);
-    members.push(data);
-  });
-
-  const games = [];
-  gamesSnap.forEach(docSnap => {
-    const data = { id: docSnap.id, ...docSnap.data() };
-    cache.games.set(docSnap.id, data);
-    games.push(data);
-  });
-
-  const tips = [];
-  tipsSnap.forEach(docSnap => {
-    const data = { id: docSnap.id, ...docSnap.data() };
-    cache.tips.set(docSnap.id, data);
-    tips.push(data);
-  });
-
-  const bonusQuestions = [];
-  bonusQSnap.forEach(docSnap => {
-    const data = { id: docSnap.id, ...docSnap.data() };
-    cache.bonusQuestions.set(docSnap.id, data);
-    bonusQuestions.push(data);
-  });
-
-  const bonusAnswers = [];
-  bonusASnap.forEach(docSnap => {
-    const data = { id: docSnap.id, ...docSnap.data() };
-    cache.bonusAnswers.set(docSnap.id, data);
-    bonusAnswers.push(data);
-  });
-
-  setCacheTimestamp(cacheKey);
-
-  return { league, members, games, tips, bonusQuestions, bonusAnswers };
-}
 
 async function requestNotificationPermission() {
   if (!("Notification" in window)) {
