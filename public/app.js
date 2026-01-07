@@ -969,7 +969,7 @@ async function checkUpcomingGames() {
     for (let game of data.games) {
       if (!game.gameTime) continue;
       
-      const gameTime = game.gameTime.toDate();
+      const gameTime = game.gameTime.toDate ? game.gameTime.toDate() : new Date(getTimestamp(game.gameTime));
       const minutesUntil = (gameTime - now) / (1000 * 60);
       
       const hasTipped = data.tips.some(tip => 
