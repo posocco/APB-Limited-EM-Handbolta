@@ -1352,7 +1352,7 @@ function canTip(gameTime) {
   if (!gameTime) return true;
   try {
     const now = new Date();
-    const game = gameTime.toDate();
+    const game = gameTime.toDate ? gameTime.toDate() : new Date(getTimestamp(gameTime));
     const diffMinutes = (game - now) / (1000 * 60);
     return diffMinutes > 15;
   } catch (error) {
