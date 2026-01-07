@@ -34,6 +34,61 @@ let activeLeagueId = null;
 let currentLeagueSettings = null;
 let currentGameForBonus = null;
 
+/* =========================
+   LOCALSTORAGE CACHE
+========================= */
+
+const CACHE_VERSION = 'v1.0';
+const CACHE_EXPIRY = 5 * 60 * 1000; // 5 mínútur
+
+function getCachedData(key) {
+  try {
+    const cached = localStorage.getItem(`cache_${CACHE_VERSION}_${key}`);
+    if (!cached) return null;
+    
+    const data = JSON.parse(cached);
+    const age = Date.now() - data.timestamp;
+    
+    if (age > CACHE_EXPIRY) {
+      localStorage.removeItem(`cache_${CACHE_VERSION}_${key}`);
+      return null;
+    }
+    
+    return data.value;
+  } catch (error) {
+    console.error('Cache read error:', error);
+    return null;
+  }
+}
+
+function setCachedData(key, value) {
+  try {
+    const cacheData = {
+      value: value,
+      timestamp: Date.now()
+    };
+    localStorage.setItem(`cache_${CACHE_VERSION}_${key}`, JSON.stringify(cacheData));
+  } catch (error) {
+    console.error('Cache write error:', error);
+  }
+}
+
+function clearCachedData(key) {
+  try {
+    if (key) {
+      localStorage.removeItem(`cache_${CACHE_VERSION}_${key}`);
+    } else {
+      Object.keys(localStorage).forEach(k => {
+        if (k.startsWith(`cache_${CACHE_VERSION}_`)) {
+          localStorage.removeItem(k);
+        }
+      });
+    }
+  } catch (error) {
+    console.error('Cache clear error:', error);
+  }
+}
+
 // GOOGLE SHEETS INTEGRATION
 const SHEET_ID = '15LQbx0CbACqEgtPpb5IC_EK3aJRavGoKgv7BFo7t9bA';
 const SHEET_NAME = 'Sheet1';
