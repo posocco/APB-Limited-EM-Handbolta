@@ -1348,10 +1348,10 @@ function formatDateTime(timestamp) {
   }
 }
 
-(gameTime) {
+function canTip(gameTime) {
   if (!gameTime) return true;
   try {
-    const now = new Date();function canTip
+    const now = new Date();
     const game = gameTime.toDate();
     const diffMinutes = (game - now) / (1000 * 60);
     return diffMinutes > 15;
