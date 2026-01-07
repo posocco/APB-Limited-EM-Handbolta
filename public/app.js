@@ -827,9 +827,9 @@ const DEFAULT_POINTS = {
 async function fetchLeagueData(leagueId) {
   const cacheKey = `league_${leagueId}`;
   
-  // 1. Athuga in-memory cache
+  // 1. In-memory cache
   if (isCacheValid(cacheKey)) {
-    console.log('⚡ Using in-memory cache');
+    console.log('⚡ In-memory cache');
     return {
       league: cache.leagues.get(leagueId),
       members: Array.from(cache.members.values()).filter(m => m.leagueId === leagueId),
@@ -840,32 +840,79 @@ async function fetchLeagueData(leagueId) {
     };
   }
   
-  // 2. Athuga localStorage cache
+  // 2. localStorage cache
   const localCached = getCachedData(cacheKey);
   if (localCached) {
-    console.log('📦 Using localStorage cache');
-    
-    // Fylla in-memory cache
+    console.log('📦 localStorage cache');
     if (localCached.league) cache.leagues.set(leagueId, localCached.league);
     localCached.members?.forEach(m => cache.members.set(m.id, m));
     localCached.games?.forEach(g => cache.games.set(g.id, g));
     localCached.tips?.forEach(t => cache.tips.set(t.id, t));
     localCached.bonusQuestions?.forEach(q => cache.bonusQuestions.set(q.id, q));
     localCached.bonusAnswers?.forEach(a => cache.bonusAnswers.set(a.id, a));
-    
     setCacheTimestamp(cacheKey);
-    
-    // Sækja ný gögn í bakgrunni
-    fetchLeagueDataFromFirebase(leagueId).catch(err => 
-      console.error('Background fetch failed:', err)
-    );
-    
+    fetchLeagueDataFromFirebase(leagueId).catch(err => console.error('Background fetch:', err));
     return localCached;
   }
   
-  // 3. Sækja úr Firebase
-  console.log('🔥 Fetching from Firebase');
+  // 3. Firebase
+  console.log('🔥 Firebase');
   return await fetchLeagueDataFromFirebase(leagueId);
+}
+
+async function fetchLeagueDataFromFirebase(leagueId) {
+  const [leagueSnap, membersSnap, gamesSnap, tipsSnap, bonusQSnap, bonusASnap] = await Promise.all([
+    getDoc(doc(db, "leagues", leagueId)),
+    getDocs(query(collection(db, "leagueMembers"), where("leagueId", "==", leagueId))),
+    getDocs(query(collection(db, "games"), where("leagueId", "==", leagueId))),
+    getDocs(query(collection(db, "tips"), where("leagueId", "==", leagueId))),
+    getDocs(query(collection(db, "bonusQuestions"), where("leagueId", "==", leagueId))),
+    getDocs(query(collection(db, "bonusAnswers"), where("leagueId", "==", leagueId)))
+  ]);
+
+  const league = leagueSnap.exists() ? { id: leagueId, ...leagueSnap.data() } : null;
+  if (league) cache.leagues.set(leagueId, league);
+
+  const members = [];
+  membersSnap.forEach(docSnap => {
+    const data = { id: docSnap.id, ...docSnap.data() };
+    cache.members.set(docSnap.id, data);
+    members.push(data);
+  });
+
+  const games = [];
+  gamesSnap.forEach(docSnap => {
+    const data = { id: docSnap.id, ...docSnap.data() };
+    cache.games.set(docSnap.id, data);
+    games.push(data);
+  });
+
+  const tips = [];
+  tipsSnap.forEach(docSnap => {
+    const data = { id: docSnap.id, ...docSnap.data() };
+    cache.tips.set(docSnap.id, data);
+    tips.push(data);
+  });
+
+  const bonusQuestions = [];
+  bonusQSnap.forEach(docSnap => {
+    const data = { id: docSnap.id, ...docSnap.data() };
+    cache.bonusQuestions.set(docSnap.id, data);
+    bonusQuestions.push(data);
+  });
+
+  const bonusAnswers = [];
+  bonusASnap.forEach(docSnap => {
+    const data = { id: docSnap.id, ...docSnap.data() };
+    cache.bonusAnswers.set(docSnap.id, data);
+    bonusAnswers.push(data);
+  });
+
+  const cacheKey = `league_${leagueId}`;
+  setCacheTimestamp(cacheKey);
+  const dataToCache = { league, members, games, tips, bonusQuestions, bonusAnswers };
+  setCachedData(cacheKey, dataToCache);
+  return dataToCache;
 }
 async function fetchLeagueDataFromFirebase(leagueId) {
   const [leagueSnap, membersSnap, gamesSnap, tipsSnap, bonusQSnap, bonusASnap] = await Promise.all([
